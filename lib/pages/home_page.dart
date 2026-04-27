@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../data/fake_subjects.dart';
 import '../models/subject.dart';
+import '../services/auth_service.dart';
 import '../widgets/app_scaffold.dart';
 import '../widgets/subject_card.dart';
 import 'subject_page.dart';
@@ -13,6 +15,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final AuthService _authService = AuthService();
   final List<Subject> subjects = List.from(fakeSubjects);
 
   void _createSubject() {
@@ -35,10 +38,29 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _signOut() async {
+    await _authService.signOut();
+
+    if (!mounted) return;
+
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/login',
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Les meves assignatures',
+      automaticallyImplyLeading: false,
+      actions: [
+        IconButton(
+          onPressed: _signOut,
+          icon: const Icon(Icons.logout),
+        ),
+      ],
       floatingActionButton: FloatingActionButton(
         onPressed: _createSubject,
         child: const Icon(Icons.add),

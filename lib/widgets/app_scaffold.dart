@@ -4,12 +4,16 @@ class AppScaffold extends StatelessWidget {
   final String title;
   final Widget child;
   final FloatingActionButton? floatingActionButton;
+  final List<Widget>? actions;
+  final bool automaticallyImplyLeading;
 
   const AppScaffold({
     super.key,
     required this.title,
     required this.child,
     this.floatingActionButton,
+    this.actions,
+    this.automaticallyImplyLeading = true,
   });
 
   @override
@@ -18,6 +22,8 @@ class AppScaffold extends StatelessWidget {
       appBar: AppBar(
         title: Text(title),
         centerTitle: true,
+        actions: actions,
+        automaticallyImplyLeading: automaticallyImplyLeading,
       ),
       body: SafeArea(child: child),
       floatingActionButton: floatingActionButton,
