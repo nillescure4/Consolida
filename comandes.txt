@@ -1,0 +1,5 @@
+flutter run -d chrome
+
+flutter clean
+rm -rf build
+flutter run -d chrome
