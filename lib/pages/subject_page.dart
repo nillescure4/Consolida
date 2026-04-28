@@ -100,9 +100,7 @@ class _SubjectPageState extends State<SubjectPage> {
               onPressed: () async {
                 final newName = _nameController.text.trim();
 
-                if (newName.isEmpty) {
-                  return;
-                }
+                if (newName.isEmpty) return;
 
                 await _subjectService.updateSubjectName(
                   subjectId: widget.subject.id,
@@ -179,34 +177,52 @@ class _SubjectPageState extends State<SubjectPage> {
       ],
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _SubjectOptionButton(
-              text: 'Importar',
-              onTap: () => _openPage(
-                ImportPage(subject: widget.subject),
-              ),
-            ),
-            _SubjectOptionButton(
-              text: 'Practicar',
-              onTap: () => _openPage(
-                PracticePage(subject: widget.subject),
-              ),
-            ),
-            _SubjectOptionButton(
-              text: 'Visualitzar',
-              onTap: () => _openPage(
-                VisualizePage(subject: widget.subject),
-              ),
-            ),
-            _SubjectOptionButton(
-              text: 'Objectius',
-              onTap: () => _openPage(
-                ObjectivesPage(subject: widget.subject),
-              ),
-            ),
-          ],
+        child: StreamBuilder<bool>(
+          stream: _subjectService.hasPendingPracticeToday(widget.subject.id),
+          builder: (context, practiceSnapshot) {
+            final hasPendingPractice = practiceSnapshot.data ?? false;
+
+            return StreamBuilder<bool>(
+              stream: _subjectService.hasNoObjectives(widget.subject.id),
+              builder: (context, objectivesSnapshot) {
+                final hasNoObjectives = objectivesSnapshot.data ?? false;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _SubjectOptionButton(
+                      text: 'Importar',
+                      onTap: () => _openPage(
+                        ImportPage(subject: widget.subject),
+                      ),
+                    ),
+                    _SubjectOptionButton(
+                      text: 'Practicar',
+                      showWarning: hasPendingPractice,
+                      warningText: 'Tens pràctica pendent',
+                      onTap: () => _openPage(
+                        PracticePage(subject: widget.subject),
+                      ),
+                    ),
+                    _SubjectOptionButton(
+                      text: 'Visualitzar',
+                      onTap: () => _openPage(
+                        VisualizePage(subject: widget.subject),
+                      ),
+                    ),
+                    _SubjectOptionButton(
+                      text: 'Objectius',
+                      showWarning: hasNoObjectives,
+                      warningText: 'Falta definir objectius',
+                      onTap: () => _openPage(
+                        ObjectivesPage(subject: widget.subject),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
         ),
       ),
     );
@@ -216,10 +232,14 @@ class _SubjectPageState extends State<SubjectPage> {
 class _SubjectOptionButton extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
+  final bool showWarning;
+  final String? warningText;
 
   const _SubjectOptionButton({
     required this.text,
     required this.onTap,
+    this.showWarning = false,
+    this.warningText,
   });
 
   @override
@@ -230,7 +250,27 @@ class _SubjectOptionButton extends StatelessWidget {
         onPressed: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Text(text),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (showWarning)
+                const Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.orange,
+                  ),
+                ),
+              Flexible(
+                child: Text(
+                  warningText == null || !showWarning
+                      ? text
+                      : '$text · $warningText',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -16,12 +16,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-
   final AuthService _authService = AuthService();
   final SubjectService _subjectService = SubjectService();
 
-  final TextEditingController _subjectController =
-      TextEditingController();
+  final TextEditingController _subjectController = TextEditingController();
 
   Future<void> createSubjectDialog() async {
     _subjectController.clear();
@@ -46,14 +44,11 @@ class _HomePageState extends State<HomePage> {
             ),
             ElevatedButton(
               onPressed: () async {
-
-                final name =
-                    _subjectController.text.trim();
+                final name = _subjectController.text.trim();
 
                 if (name.isEmpty) return;
 
-                await _subjectService
-                    .createSubject(name);
+                await _subjectService.createSubject(name);
 
                 if (!context.mounted) return;
 
@@ -71,66 +66,41 @@ class _HomePageState extends State<HomePage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            SubjectPage(subject: subject),
+        builder: (_) => SubjectPage(subject: subject),
       ),
     );
   }
 
   Future<void> signOut() async {
-
     final user = FirebaseAuth.instance.currentUser;
 
-    final displayName =
-        user?.displayName?.trim();
+    final displayName = user?.displayName?.trim();
+    final email = user?.email?.trim() ?? '';
 
-    final email =
-        user?.email?.trim() ?? '';
+    final accountLabel = displayName != null && displayName.isNotEmpty
+        ? '$displayName ($email)'
+        : email;
 
-    final accountLabel =
-        (displayName != null &&
-                displayName.isNotEmpty)
-            ? '$displayName ($email)'
-            : email;
-
-    final confirm =
-        await showDialog<bool>(
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) {
-
         return AlertDialog(
-          title: const Text(
-            'Confirmar tancament de sessió',
-          ),
-
+          title: const Text('Confirmar tancament de sessió'),
           content: Text(
-            'Vols tancar sessió amb el compte:\n\n$accountLabel ?',
+            'Vols tancar sessió amb el compte:\n\n$accountLabel?',
           ),
-
           actions: [
-
             TextButton(
               onPressed: () {
-                Navigator.pop(
-                  context,
-                  false,
-                );
+                Navigator.pop(context, false);
               },
-              child: const Text(
-                'Cancel·lar',
-              ),
+              child: const Text('Cancel·lar'),
             ),
-
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(
-                  context,
-                  true,
-                );
+                Navigator.pop(context, true);
               },
-              child: const Text(
-                'Tancar sessió',
-              ),
+              child: const Text('Tancar sessió'),
             ),
           ],
         );
@@ -158,94 +128,70 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-
     return AppScaffold(
       title: 'Les meves assignatures',
-
       automaticallyImplyLeading: false,
-
       actions: [
         IconButton(
           onPressed: signOut,
-          icon: const Icon(
-            Icons.logout,
-          ),
+          icon: const Icon(Icons.logout),
         ),
       ],
-
-      floatingActionButton:
-          FloatingActionButton(
-        onPressed:
-            createSubjectDialog,
-        child:
-            const Icon(Icons.add),
+      floatingActionButton: FloatingActionButton(
+        onPressed: createSubjectDialog,
+        child: const Icon(Icons.add),
       ),
-
-      child:
-          StreamBuilder<List<Subject>>(
-
-        stream:
-            _subjectService.getSubjects(),
-
-        builder:
-            (context, snapshot) {
-
-          if (snapshot
-                  .connectionState ==
-              ConnectionState.waiting) {
-
+      child: StreamBuilder<List<Subject>>(
+        stream: _subjectService.getSubjects(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-              child:
-                  CircularProgressIndicator(),
+              child: CircularProgressIndicator(),
             );
           }
 
           if (snapshot.hasError) {
-
             return Center(
-              child: Text(
-                'Error: ${snapshot.error}',
-              ),
+              child: Text('Error: ${snapshot.error}'),
             );
           }
 
-          final subjects =
-              snapshot.data ?? [];
+          final subjects = snapshot.data ?? [];
 
           if (subjects.isEmpty) {
-
             return const Center(
-              child: Text(
-                'Encara no tens assignatures',
-              ),
+              child: Text('Encara no tens assignatures'),
             );
           }
 
           return Padding(
-            padding:
-                const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            child: ListView.builder(
+              itemCount: subjects.length,
+              itemBuilder: (context, index) {
+                final subject = subjects[index];
 
-            child:
-                ListView.builder(
-              itemCount:
-                  subjects.length,
+                return StreamBuilder<bool>(
+                  stream: _subjectService.hasPendingPracticeToday(subject.id),
+                  builder: (context, practiceSnapshot) {
+                    final hasPendingPractice =
+                        practiceSnapshot.data ?? false;
 
-              itemBuilder:
-                  (
-                context,
-                index,
-              ) {
+                    return StreamBuilder<bool>(
+                      stream: _subjectService.hasNoObjectives(subject.id),
+                      builder: (context, objectivesSnapshot) {
+                        final hasNoObjectives =
+                            objectivesSnapshot.data ?? false;
 
-                final subject =
-                    subjects[index];
-
-                return SubjectCard(
-                  subject:
-                      subject,
-                  onTap: () =>
-                      openSubject(
-                        subject,
-                      ),
+                        return SubjectCard(
+                          subject: subject,
+                          hasPendingPracticeToday: hasPendingPractice,
+                          hasNoObjectives: hasNoObjectives,
+                          onTap: () => openSubject(subject),
+                        );
+                      },
+                    );
+                  },
                 );
               },
             ),

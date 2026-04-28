@@ -30,11 +30,63 @@ class SubjectService {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map(
-                (doc) => Subject.fromFirestore(doc),
-              )
+              .map((doc) => Subject.fromFirestore(doc))
               .toList(),
         );
+  }
+
+  Stream<bool> hasPendingPracticeToday(String subjectId) {
+    final today = DateTime.now();
+
+    final todayOnly = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    );
+
+    return subjectsCollection
+        .doc(subjectId)
+        .collection('practiceSessions')
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) {
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+
+        final scheduledDateRaw = data['scheduledDate'];
+
+        if (scheduledDateRaw is! Timestamp) {
+          continue;
+        }
+
+        final scheduledDate = scheduledDateRaw.toDate();
+
+        final scheduledDateOnly = DateTime(
+          scheduledDate.year,
+          scheduledDate.month,
+          scheduledDate.day,
+        );
+
+        final isTodayOrPast =
+            scheduledDateOnly.isBefore(todayOnly) ||
+            scheduledDateOnly.isAtSameMomentAs(todayOnly);
+
+        if (isTodayOrPast) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+  }
+
+  Stream<bool> hasNoObjectives(String subjectId) {
+    return subjectsCollection
+        .doc(subjectId)
+        .collection('goals')
+        .limit(1)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.isEmpty);
   }
 
   Future<void> createSubject(String name) async {
