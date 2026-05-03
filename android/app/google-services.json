@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "302553443829",
+    "project_id": "consolida-app",
+    "storage_bucket": "consolida-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:302553443829:android:7cde8219f01220921c04bc",
+        "android_client_info": {
+          "package_name": "com.example.tfg_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYKw8PvusgTv_nt6KZoQiGtzr5zbYMS_0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -21,20 +21,11 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for android - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
         return windows;
       case TargetPlatform.linux:
@@ -68,4 +59,31 @@ class DefaultFirebaseOptions {
     storageBucket: 'consolida-app.firebasestorage.app',
     measurementId: 'G-VJQTY3F1F2',
   );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyAcHLXLC3u-BqSl-jq7QzItp6ij9M19X0k',
+    appId: '1:302553443829:ios:f614c6d4c725d8db1c04bc',
+    messagingSenderId: '302553443829',
+    projectId: 'consolida-app',
+    storageBucket: 'consolida-app.firebasestorage.app',
+    iosBundleId: 'com.example.tfgApp',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyAcHLXLC3u-BqSl-jq7QzItp6ij9M19X0k',
+    appId: '1:302553443829:ios:f614c6d4c725d8db1c04bc',
+    messagingSenderId: '302553443829',
+    projectId: 'consolida-app',
+    storageBucket: 'consolida-app.firebasestorage.app',
+    iosBundleId: 'com.example.tfgApp',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyCYKw8PvusgTv_nt6KZoQiGtzr5zbYMS_0',
+    appId: '1:302553443829:android:7cde8219f01220921c04bc',
+    messagingSenderId: '302553443829',
+    projectId: 'consolida-app',
+    storageBucket: 'consolida-app.firebasestorage.app',
+  );
+
 }
