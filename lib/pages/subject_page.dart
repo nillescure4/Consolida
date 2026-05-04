@@ -178,47 +178,59 @@ class _SubjectPageState extends State<SubjectPage> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: StreamBuilder<bool>(
-          stream: _subjectService.hasPendingPracticeToday(widget.subject.id),
-          builder: (context, practiceSnapshot) {
-            final hasPendingPractice = practiceSnapshot.data ?? false;
+          stream: _subjectService.hasNoImportedFiles(widget.subject.id),
+          builder: (context, filesSnapshot) {
+            final hasNoImportedFiles = filesSnapshot.data ?? false;
 
             return StreamBuilder<bool>(
               stream: _subjectService.hasNoObjectives(widget.subject.id),
               builder: (context, objectivesSnapshot) {
                 final hasNoObjectives = objectivesSnapshot.data ?? false;
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _SubjectOptionButton(
-                      text: 'Importar',
-                      onTap: () => _openPage(
-                        ImportPage(subject: widget.subject),
-                      ),
-                    ),
-                    _SubjectOptionButton(
-                      text: 'Practicar',
-                      showWarning: hasPendingPractice,
-                      warningText: 'Tens pràctica pendent',
-                      onTap: () => _openPage(
-                        PracticePage(subject: widget.subject),
-                      ),
-                    ),
-                    _SubjectOptionButton(
-                      text: 'Visualitzar',
-                      onTap: () => _openPage(
-                        VisualizePage(subject: widget.subject),
-                      ),
-                    ),
-                    _SubjectOptionButton(
-                      text: 'Objectius',
-                      showWarning: hasNoObjectives,
-                      warningText: 'Falta definir objectius',
-                      onTap: () => _openPage(
-                        ObjectivesPage(subject: widget.subject),
-                      ),
-                    ),
-                  ],
+                return StreamBuilder<bool>(
+                  stream: _subjectService.hasPendingPracticeToday(
+                    widget.subject.id,
+                  ),
+                  builder: (context, practiceSnapshot) {
+                    final hasPendingPractice =
+                        practiceSnapshot.data ?? false;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _SubjectOptionButton(
+                          text: 'Importar',
+                          showWarning: hasNoImportedFiles,
+                          warningText: 'Falta material',
+                          onTap: () => _openPage(
+                            ImportPage(subject: widget.subject),
+                          ),
+                        ),
+                        _SubjectOptionButton(
+                          text: 'Practicar',
+                          showWarning: hasPendingPractice,
+                          warningText: 'Tens pràctica pendent',
+                          onTap: () => _openPage(
+                            PracticePage(subject: widget.subject),
+                          ),
+                        ),
+                        _SubjectOptionButton(
+                          text: 'Visualitzar',
+                          onTap: () => _openPage(
+                            VisualizePage(subject: widget.subject),
+                          ),
+                        ),
+                        _SubjectOptionButton(
+                          text: 'Objectius',
+                          showWarning: hasNoObjectives,
+                          warningText: 'Falta definir objectius',
+                          onTap: () => _openPage(
+                            ObjectivesPage(subject: widget.subject),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             );

@@ -7,6 +7,7 @@ class SubjectCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool hasPendingPracticeToday;
   final bool hasNoObjectives;
+  final bool hasNoImportedFiles;
 
   const SubjectCard({
     super.key,
@@ -14,21 +15,22 @@ class SubjectCard extends StatelessWidget {
     required this.onTap,
     this.hasPendingPracticeToday = false,
     this.hasNoObjectives = false,
+    this.hasNoImportedFiles = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasAlert = hasPendingPracticeToday || hasNoObjectives;
+    String? alertText;
 
-    String? subtitle;
-
-    if (hasPendingPracticeToday && hasNoObjectives) {
-      subtitle = 'Pràctica pendent i falta definir objectius';
-    } else if (hasPendingPracticeToday) {
-      subtitle = 'Avui tens pràctica pendent';
+    if (hasNoImportedFiles) {
+      alertText = 'Falta material importat';
     } else if (hasNoObjectives) {
-      subtitle = 'Encara no has definit cap objectiu';
+      alertText = 'Falten objectius';
+    } else if (hasPendingPracticeToday) {
+      alertText = 'Pràctica pendent';
     }
+
+    final hasAlert = alertText != null;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -40,7 +42,7 @@ class SubjectCard extends StatelessWidget {
               )
             : null,
         title: Text(subject.name),
-        subtitle: subtitle == null ? null : Text(subtitle),
+        subtitle: hasAlert ? Text(alertText) : null,
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
       ),

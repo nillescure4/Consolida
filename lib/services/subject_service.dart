@@ -35,6 +35,24 @@ class SubjectService {
         );
   }
 
+  Stream<bool> hasNoImportedFiles(String subjectId) {
+    return subjectsCollection
+        .doc(subjectId)
+        .collection('importedFiles')
+        .limit(1)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.isEmpty);
+  }
+
+  Stream<bool> hasNoObjectives(String subjectId) {
+    return subjectsCollection
+        .doc(subjectId)
+        .collection('goals')
+        .limit(1)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.isEmpty);
+  }
+
   Stream<bool> hasPendingPracticeToday(String subjectId) {
     final today = DateTime.now();
 
@@ -52,7 +70,6 @@ class SubjectService {
         .map((snapshot) {
       for (final doc in snapshot.docs) {
         final data = doc.data();
-
         final scheduledDateRaw = data['scheduledDate'];
 
         if (scheduledDateRaw is! Timestamp) {
@@ -78,15 +95,6 @@ class SubjectService {
 
       return false;
     });
-  }
-
-  Stream<bool> hasNoObjectives(String subjectId) {
-    return subjectsCollection
-        .doc(subjectId)
-        .collection('goals')
-        .limit(1)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.isEmpty);
   }
 
   Future<void> createSubject(String name) async {

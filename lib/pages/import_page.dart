@@ -6,6 +6,7 @@ import 'package:open_filex/open_filex.dart';
 import '../models/imported_file.dart';
 import '../models/subject.dart';
 import '../services/import_service.dart';
+import '../services/material_processing_service.dart';
 import '../widgets/app_scaffold.dart';
 
 class ImportPage extends StatefulWidget {
@@ -22,6 +23,8 @@ class ImportPage extends StatefulWidget {
 
 class _ImportPageState extends State<ImportPage> {
   final ImportService _importService = ImportService();
+  final MaterialProcessingService _materialProcessingService =
+      MaterialProcessingService();
 
   bool _isImporting = false;
 
@@ -31,21 +34,44 @@ class _ImportPageState extends State<ImportPage> {
     });
 
     try {
-      await _importService.pickAndSaveFileLocally(widget.subject.id);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Fitxer importat correctament.'),
-        ),
+      final importedFile = await _importService.pickAndSaveFileLocally(
+        widget.subject.id,
       );
+
+      if (importedFile == null) {
+        return;
+      }
+
+      if (_isProcessable(importedFile.type)) {
+        await _materialProcessingService.processImportedFile(
+          subjectId: widget.subject.id,
+          file: importedFile,
+        );
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Fitxer importat i processat correctament.'),
+          ),
+        );
+      } else {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Fitxer importat. Aquest format encara no es pot processar.',
+            ),
+          ),
+        );
+      }
     } catch (error) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error important el fitxer: $error'),
+          content: Text('Error important o processant el fitxer: $error'),
         ),
       );
     } finally {
@@ -157,6 +183,14 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
+  bool _isProcessable(String type) {
+    final normalized = type.toLowerCase();
+
+    return normalized == 'pdf' ||
+        normalized == 'txt' ||
+        normalized == 'docx';
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -188,9 +222,29 @@ class _ImportPageState extends State<ImportPage> {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
-                child: Text(
-                  'Encara no has importat cap fitxer.\n\nPrem el botó + per afegir apunts, PDFs o documents.',
-                  textAlign: TextAlign.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.orange,
+                      size: 48,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Encara no has importat cap material.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Prem el botó + per afegir apunts, PDFs o documents.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
             );

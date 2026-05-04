@@ -172,10 +172,9 @@ class _HomePageState extends State<HomePage> {
                 final subject = subjects[index];
 
                 return StreamBuilder<bool>(
-                  stream: _subjectService.hasPendingPracticeToday(subject.id),
-                  builder: (context, practiceSnapshot) {
-                    final hasPendingPractice =
-                        practiceSnapshot.data ?? false;
+                  stream: _subjectService.hasNoImportedFiles(subject.id),
+                  builder: (context, filesSnapshot) {
+                    final hasNoImportedFiles = filesSnapshot.data ?? false;
 
                     return StreamBuilder<bool>(
                       stream: _subjectService.hasNoObjectives(subject.id),
@@ -183,11 +182,22 @@ class _HomePageState extends State<HomePage> {
                         final hasNoObjectives =
                             objectivesSnapshot.data ?? false;
 
-                        return SubjectCard(
-                          subject: subject,
-                          hasPendingPracticeToday: hasPendingPractice,
-                          hasNoObjectives: hasNoObjectives,
-                          onTap: () => openSubject(subject),
+                        return StreamBuilder<bool>(
+                          stream: _subjectService.hasPendingPracticeToday(
+                            subject.id,
+                          ),
+                          builder: (context, practiceSnapshot) {
+                            final hasPendingPractice =
+                                practiceSnapshot.data ?? false;
+
+                            return SubjectCard(
+                              subject: subject,
+                              hasNoImportedFiles: hasNoImportedFiles,
+                              hasNoObjectives: hasNoObjectives,
+                              hasPendingPracticeToday: hasPendingPractice,
+                              onTap: () => openSubject(subject),
+                            );
+                          },
                         );
                       },
                     );

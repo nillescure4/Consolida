@@ -33,6 +33,17 @@ class ImportService {
         .collection('importedFiles');
   }
 
+  CollectionReference<Map<String, dynamic>> processedMaterialsCollection(
+    String subjectId,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('subjects')
+        .doc(subjectId)
+        .collection('processedMaterials');
+  }
+
   Stream<List<ImportedFile>> getFiles(String subjectId) {
     return filesCollection(subjectId)
         .orderBy('createdAt', descending: true)
@@ -44,7 +55,7 @@ class ImportService {
         );
   }
 
-  Future<void> pickAndSaveFileLocally(String subjectId) async {
+  Future<ImportedFile?> pickAndSaveFileLocally(String subjectId) async {
     final result = await FilePicker.pickFiles(
       allowMultiple: false,
       withData: false,
@@ -52,14 +63,13 @@ class ImportService {
       allowedExtensions: [
         'pdf',
         'txt',
-        'doc',
         'docx',
-        'ppt',
-        'pptx',
       ],
     );
 
-    if (result == null || result.files.isEmpty) return;
+    if (result == null || result.files.isEmpty) {
+      return null;
+    }
 
     final pickedFile = result.files.single;
 
@@ -92,7 +102,11 @@ class ImportService {
     }
 
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final safeFileName = pickedFile.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+
+    final safeFileName = pickedFile.name.replaceAll(
+      RegExp(r'[\\/:*?"<>|]'),
+      '_',
+    );
 
     final localFilePath = p.join(
       subjectDirectory.path,
@@ -101,13 +115,24 @@ class ImportService {
 
     final copiedFile = await originalFile.copy(localFilePath);
 
-    await filesCollection(subjectId).add({
+    final fileExtension = pickedFile.extension ?? 'unknown';
+
+    final docRef = await filesCollection(subjectId).add({
       'name': pickedFile.name,
       'localPath': copiedFile.path,
-      'type': pickedFile.extension ?? 'unknown',
+      'type': fileExtension,
       'sizeBytes': pickedFile.size,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    return ImportedFile(
+      id: docRef.id,
+      name: pickedFile.name,
+      localPath: copiedFile.path,
+      type: fileExtension,
+      sizeBytes: pickedFile.size,
+      createdAt: DateTime.now(),
+    );
   }
 
   Future<void> deleteFile({
@@ -120,6 +145,18 @@ class ImportService {
       await localFile.delete();
     }
 
-    await filesCollection(subjectId).doc(file.id).delete();
+    final processedSnapshot = await processedMaterialsCollection(subjectId)
+        .where('fileId', isEqualTo: file.id)
+        .get();
+
+    final batch = _firestore.batch();
+
+    for (final doc in processedSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    batch.delete(filesCollection(subjectId).doc(file.id));
+
+    await batch.commit();
   }
 }
