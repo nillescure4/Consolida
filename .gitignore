@@ -46,4 +46,4 @@ app.*.map.json
 
 
 # Gemini API key
-Meva Gemini API
+lib/config/api_keys.dart
