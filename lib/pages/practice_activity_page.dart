@@ -7,10 +7,12 @@ import '../models/practice_activity_type.dart';
 import '../models/practice_item.dart';
 import '../models/subject.dart';
 import '../services/practice_error_service.dart';
+import '../services/practice_stats_service.dart';
 import '../widgets/app_scaffold.dart';
 
 class PracticeActivityPage extends StatefulWidget {
   final Subject subject;
+  final String sessionId;
   final PracticeActivityType type;
   final List<PracticeItem> items;
   final String? summaryText;
@@ -23,6 +25,7 @@ class PracticeActivityPage extends StatefulWidget {
   const PracticeActivityPage({
     super.key,
     required this.subject,
+    required this.sessionId,
     required this.type,
     required this.items,
     this.summaryText,
@@ -39,6 +42,7 @@ class PracticeActivityPage extends StatefulWidget {
 
 class _PracticeActivityPageState extends State<PracticeActivityPage> {
   final PracticeErrorService _errorService = PracticeErrorService();
+  final PracticeStatsService _statsService = PracticeStatsService();
 
   Timer? _timer;
   int _currentIndex = 0;
@@ -61,6 +65,17 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
     if (_currentIndex >= widget.items.length) return null;
 
     return widget.items[_currentIndex];
+  }
+
+  Future<void> _registerAttempt(bool isCorrect) async {
+    await _statsService.registerAttempt(
+      subjectId: widget.subject.id,
+      sessionId: widget.sessionId,
+      activityType: widget.type == PracticeActivityType.errorTest
+          ? (_currentItem?.type ?? widget.type)
+          : widget.type,
+      isCorrect: isCorrect,
+    );
   }
 
   void _startTimer() {
@@ -189,11 +204,14 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
   }
 
   Future<void> _markWrongAndNext() async {
+    await _registerAttempt(false);
     await _saveCurrentAsError();
     _nextItem();
   }
 
   Future<void> _markCorrectAndNext() async {
+    await _registerAttempt(true);
+
     if (widget.type == PracticeActivityType.errorTest) {
       await _removeCurrentFromErrors();
     }
@@ -416,10 +434,14 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
                           });
 
                           if (option != item.answer) {
+                            await _registerAttempt(false);
                             await _saveCurrentAsError();
-                          } else if (widget.type ==
-                              PracticeActivityType.errorTest) {
-                            await _removeCurrentFromErrors();
+                          } else {
+                            await _registerAttempt(true);
+
+                            if (widget.type == PracticeActivityType.errorTest) {
+                              await _removeCurrentFromErrors();
+                            }
                           }
                         },
                   child: Text(option),

@@ -236,6 +236,7 @@ class _PracticePageState extends State<PracticePage> {
       MaterialPageRoute(
         builder: (_) => PracticeActivityPage(
           subject: widget.subject,
+          sessionId: _activeSessionId ?? '',
           type: type,
           items: items,
           summaryText: summary,
