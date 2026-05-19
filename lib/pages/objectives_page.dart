@@ -138,6 +138,7 @@ class _ObjectivesPageState extends State<ObjectivesPage> {
 
     await _objectiveService.saveGoalWithSessions(
       subjectId: widget.subject.id,
+      subjectName: widget.subject.name,
       goal: goal,
       dates: editedDates,
     );
@@ -341,6 +342,7 @@ class _ObjectivesPageState extends State<ObjectivesPage> {
 
     await _objectiveService.deleteGoal(
       subjectId: widget.subject.id,
+      subjectName: widget.subject.name,
       goalId: goal.id,
     );
   }

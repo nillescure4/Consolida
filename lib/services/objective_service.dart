@@ -5,6 +5,7 @@ import '../models/goal_type.dart';
 import '../models/practice_session.dart';
 import '../models/practice_timer_state.dart';
 import '../models/study_goal.dart';
+import 'notification_service.dart';
 
 class ObjectiveService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -149,6 +150,7 @@ class ObjectiveService {
 
   Future<void> saveGoalWithSessions({
     required String subjectId,
+    required String subjectName,
     required StudyGoal goal,
     required List<DateTime> dates,
   }) async {
@@ -182,6 +184,91 @@ class ObjectiveService {
     }
 
     await batch.commit();
+
+    final today = DateTime.now();
+
+    final hasPracticeToday = dates.any((date) {
+      return date.year == today.year &&
+          date.month == today.month &&
+          date.day == today.day;
+    });
+
+    if (hasPracticeToday) {
+      await NotificationService.showInstantPendingPracticeNotification(
+        subjectName: subjectName,
+        goalTitle: goal.title,
+      );
+    }
+
+    await schedulePendingPracticeNotificationForSubject(
+      subjectId: subjectId,
+      subjectName: subjectName,
+    );
+  }
+
+  Future<void> schedulePendingPracticeNotificationForSubject({
+    required String subjectId,
+    required String subjectName,
+  }) async {
+    final pendingSession = await _getNextDuePendingSession(subjectId);
+
+    if (pendingSession == null) {
+      await NotificationService.cancelSubjectNotifications(subjectId);
+      return;
+    }
+
+    final goalTitle = pendingSession.data()['goalTitle'] ?? 'Objectiu';
+
+    await NotificationService.scheduleDailyPendingPracticeNotification(
+      subjectId: subjectId,
+      subjectName: subjectName,
+      goalTitle: goalTitle,
+      hour: 9,
+      minute: 0,
+    );
+  }
+
+  Future<QueryDocumentSnapshot<Map<String, dynamic>>?> _getNextDuePendingSession(
+    String subjectId,
+  ) async {
+    final snapshot = await sessionsCollection(subjectId)
+        .where('status', isEqualTo: 'pending')
+        .get();
+
+    final now = DateTime.now();
+    final todayOnly = DateTime(now.year, now.month, now.day);
+
+    final dueSessions = snapshot.docs.where((doc) {
+      final data = doc.data();
+      final scheduledDateRaw = data['scheduledDate'];
+
+      if (scheduledDateRaw is! Timestamp) {
+        return false;
+      }
+
+      final scheduledDate = scheduledDateRaw.toDate();
+      final scheduledDateOnly = DateTime(
+        scheduledDate.year,
+        scheduledDate.month,
+        scheduledDate.day,
+      );
+
+      return scheduledDateOnly.isBefore(todayOnly) ||
+          scheduledDateOnly.isAtSameMomentAs(todayOnly);
+    }).toList();
+
+    dueSessions.sort((a, b) {
+      final aDate = (a.data()['scheduledDate'] as Timestamp).toDate();
+      final bDate = (b.data()['scheduledDate'] as Timestamp).toDate();
+
+      return aDate.compareTo(bDate);
+    });
+
+    if (dueSessions.isEmpty) {
+      return null;
+    }
+
+    return dueSessions.first;
   }
 
   Future<void> updateRemainingSeconds({
@@ -197,6 +284,7 @@ class ObjectiveService {
 
   Future<void> completePracticeSession({
     required String subjectId,
+    required String subjectName,
     required String sessionId,
   }) async {
     await sessionsCollection(subjectId).doc(sessionId).update({
@@ -204,10 +292,16 @@ class ObjectiveService {
       'status': 'completed',
       'completedAt': FieldValue.serverTimestamp(),
     });
+
+    await schedulePendingPracticeNotificationForSubject(
+      subjectId: subjectId,
+      subjectName: subjectName,
+    );
   }
 
   Future<void> deleteGoal({
     required String subjectId,
+    required String subjectName,
     required String goalId,
   }) async {
     final sessionsSnapshot = await sessionsCollection(subjectId)
@@ -225,6 +319,11 @@ class ObjectiveService {
     await batch.commit();
 
     await cleanOrphanPracticeSessions(subjectId);
+
+    await schedulePendingPracticeNotificationForSubject(
+      subjectId: subjectId,
+      subjectName: subjectName,
+    );
   }
 
   Future<void> cleanOrphanPracticeSessions(String subjectId) async {

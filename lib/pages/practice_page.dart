@@ -102,6 +102,7 @@ class _PracticePageState extends State<PracticePage> {
 
     await _objectiveService.completePracticeSession(
       subjectId: widget.subject.id,
+      subjectName: widget.subject.name,
       sessionId: sessionId,
     );
 
