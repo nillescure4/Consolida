@@ -99,25 +99,33 @@ class AiOpenQuestion {
 }
 
 class AiExercise {
+  final String sourceFileName;
   final String exercise;
   final String solution;
+  final bool solutionGeneratedByAi;
 
   const AiExercise({
+    required this.sourceFileName,
     required this.exercise,
     required this.solution,
+    required this.solutionGeneratedByAi,
   });
 
   factory AiExercise.fromJson(Map<String, dynamic> json) {
     return AiExercise(
+      sourceFileName: json['sourceFileName'] ?? '',
       exercise: json['exercise'] ?? '',
       solution: json['solution'] ?? '',
+      solutionGeneratedByAi: json['solutionGeneratedByAi'] ?? false,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'sourceFileName': sourceFileName,
       'exercise': exercise,
       'solution': solution,
+      'solutionGeneratedByAi': solutionGeneratedByAi,
     };
   }
 }
@@ -150,7 +158,11 @@ class AiGeneratedActivity {
           )
           .toList(),
       flashcards: (json['flashcards'] as List? ?? [])
-          .map((item) => AiFlashcard.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => AiFlashcard.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
           .toList(),
       multipleChoiceQuestions:
           (json['multipleChoiceQuestions'] as List? ?? [])
@@ -168,7 +180,12 @@ class AiGeneratedActivity {
           )
           .toList(),
       exercises: (json['exercises'] as List? ?? [])
-          .map((item) => AiExercise.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => AiExercise.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .where((exercise) => exercise.exercise.trim().isNotEmpty)
           .toList(),
     );
   }

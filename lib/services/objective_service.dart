@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../models/goal_type.dart';
 import '../models/practice_session.dart';
 import '../models/practice_timer_state.dart';
 import '../models/study_goal.dart';
@@ -68,16 +67,14 @@ class ObjectiveService {
       final now = DateTime.now();
       final todayOnly = DateTime(now.year, now.month, now.day);
 
-      QueryDocumentSnapshot<Map<String, dynamic>>? duePendingSession;
+      final duePendingSessions = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
       QueryDocumentSnapshot<Map<String, dynamic>>? completedTodaySession;
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
-        final scheduledDateRaw = data['scheduledDate'];
 
-        if (scheduledDateRaw is! Timestamp) {
-          continue;
-        }
+        final scheduledDateRaw = data['scheduledDate'];
+        if (scheduledDateRaw is! Timestamp) continue;
 
         final scheduledDate = scheduledDateRaw.toDate();
         final scheduledDateOnly = DateTime(
@@ -91,19 +88,36 @@ class ObjectiveService {
         final isTodayOrPast = scheduledDateOnly.isBefore(todayOnly) ||
             scheduledDateOnly.isAtSameMomentAs(todayOnly);
 
-        final isToday = scheduledDateOnly.isAtSameMomentAs(todayOnly);
-
         if (status == 'pending' && isTodayOrPast) {
-          duePendingSession ??= doc;
+          duePendingSessions.add(doc);
         }
 
-        if (status == 'completed' && isToday) {
-          completedTodaySession ??= doc;
+        final completedAtRaw = data['completedAt'];
+
+        if (status == 'completed' && completedAtRaw is Timestamp) {
+          final completedAt = completedAtRaw.toDate();
+          final completedOnly = DateTime(
+            completedAt.year,
+            completedAt.month,
+            completedAt.day,
+          );
+
+          if (completedOnly.isAtSameMomentAs(todayOnly)) {
+            completedTodaySession ??= doc;
+          }
         }
       }
 
-      if (duePendingSession != null) {
-        final data = duePendingSession.data();
+      duePendingSessions.sort((a, b) {
+        final aDate = (a.data()['scheduledDate'] as Timestamp).toDate();
+        final bDate = (b.data()['scheduledDate'] as Timestamp).toDate();
+
+        return aDate.compareTo(bDate);
+      });
+
+      if (duePendingSessions.isNotEmpty) {
+        final session = duePendingSessions.first;
+        final data = session.data();
 
         final durationMinutes = data['durationMinutes'] is int
             ? data['durationMinutes'] as int
@@ -113,12 +127,16 @@ class ObjectiveService {
             ? data['remainingSeconds'] as int
             : durationMinutes * 60;
 
+        final scheduledDate = (data['scheduledDate'] as Timestamp).toDate();
+
         return PracticeTimerState(
-          sessionId: duePendingSession.id,
+          sessionId: session.id,
           remainingSeconds: remainingSeconds,
           durationMinutes: durationMinutes,
           hasDueSession: true,
           completedToday: false,
+          goalTitle: data['goalTitle'] ?? 'Objectiu',
+          scheduledDate: scheduledDate,
         );
       }
 
@@ -129,12 +147,17 @@ class ObjectiveService {
             ? data['durationMinutes'] as int
             : 30;
 
+        final scheduledDateRaw = data['scheduledDate'];
+
         return PracticeTimerState(
           sessionId: completedTodaySession.id,
           remainingSeconds: 0,
           durationMinutes: durationMinutes,
           hasDueSession: false,
           completedToday: true,
+          goalTitle: data['goalTitle'] ?? 'Objectiu',
+          scheduledDate:
+              scheduledDateRaw is Timestamp ? scheduledDateRaw.toDate() : null,
         );
       }
 
@@ -160,7 +183,7 @@ class ObjectiveService {
 
     batch.set(goalRef, {
       'title': goal.title,
-      'type': goal.type.value,
+      'type': goal.type.name,
       'targetDate': goal.targetDate == null
           ? null
           : Timestamp.fromDate(goal.targetDate!),
@@ -242,9 +265,7 @@ class ObjectiveService {
       final data = doc.data();
       final scheduledDateRaw = data['scheduledDate'];
 
-      if (scheduledDateRaw is! Timestamp) {
-        return false;
-      }
+      if (scheduledDateRaw is! Timestamp) return false;
 
       final scheduledDate = scheduledDateRaw.toDate();
       final scheduledDateOnly = DateTime(
@@ -264,9 +285,7 @@ class ObjectiveService {
       return aDate.compareTo(bDate);
     });
 
-    if (dueSessions.isEmpty) {
-      return null;
-    }
+    if (dueSessions.isEmpty) return null;
 
     return dueSessions.first;
   }
@@ -291,6 +310,7 @@ class ObjectiveService {
       'remainingSeconds': 0,
       'status': 'completed',
       'completedAt': FieldValue.serverTimestamp(),
+      'completedDate': Timestamp.fromDate(DateTime.now()),
     });
 
     await schedulePendingPracticeNotificationForSubject(

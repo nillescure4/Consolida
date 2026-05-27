@@ -1,8 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../services/auth_service.dart';
-import '../widgets/app_scaffold.dart';
+import '../utils/auth_error_translator.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -12,20 +12,38 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
-  final AuthService _authService = AuthService();
-
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _repeatPasswordController = TextEditingController();
 
   bool _isLoading = false;
   String? _errorMessage;
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _repeatPasswordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _signUp() async {
-    if (_passwordController.text.trim() !=
-        _confirmPasswordController.text.trim()) {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final repeatPassword =
+        _repeatPasswordController.text.trim();
+
+    if (name.isEmpty) {
+      setState(() {
+        _errorMessage = 'Introdueix el teu nom.';
+      });
+      return;
+    }
+
+    if (password != repeatPassword) {
       setState(() {
         _errorMessage = 'Les contrasenyes no coincideixen.';
       });
@@ -38,31 +56,50 @@ class _SignUpPageState extends State<SignUpPage> {
     });
 
     try {
-      await _authService.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+      final credential =
+          await FirebaseAuth.instance
+              .createUserWithEmailAndPassword(
+        email: email,
+        password: password,
       );
 
-      await FirebaseAuth.instance.currentUser?.updateDisplayName(
-        _nameController.text.trim(),
-      );
+      final user = credential.user;
+
+      if (user != null) {
+        await user.updateDisplayName(name);
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'name': name,
+          'email': email,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
 
       await FirebaseAuth.instance.signOut();
 
       if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Compte creat correctament. Ara pots iniciar sessió.',
+          ),
+        ),
+      );
 
       Navigator.pushNamedAndRemoveUntil(
         context,
         '/login',
         (route) => false,
       );
-    } on FirebaseAuthException catch (e) {
+    } catch (error) {
+      if (!mounted) return;
+
       setState(() {
-        _errorMessage = e.message ?? 'Error en crear el compte.';
-      });
-    } catch (_) {
-      setState(() {
-        _errorMessage = 'S’ha produït un error inesperat.';
+        _errorMessage = translateAuthError(error);
       });
     } finally {
       if (mounted) {
@@ -73,91 +110,127 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    super.dispose();
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    bool obscure = false,
+    TextInputType? keyboardType,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextField(
+        controller: controller,
+        obscureText: obscure,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
-      title: 'Crear compte',
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return Scaffold(
+      body: Center(
         child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 20),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nom',
-                  border: OutlineInputBorder(),
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 420,
+            ),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Crear compte',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Correu electrònic',
-                  border: OutlineInputBorder(),
+
+                const SizedBox(height: 30),
+
+                _buildField(
+                  controller: _nameController,
+                  label: 'Nom',
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Contrasenya',
-                  border: OutlineInputBorder(),
+
+                _buildField(
+                  controller: _emailController,
+                  label: 'Correu electrònic',
+                  keyboardType:
+                      TextInputType.emailAddress,
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _confirmPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Confirmar contrasenya',
-                  border: OutlineInputBorder(),
+
+                _buildField(
+                  controller: _passwordController,
+                  label: 'Contrasenya',
+                  obscure: true,
                 ),
-              ),
-              const SizedBox(height: 16),
-              if (_errorMessage != null)
-                Text(
-                  _errorMessage!,
-                  style: const TextStyle(color: Colors.red),
+
+                _buildField(
+                  controller:
+                      _repeatPasswordController,
+                  label:
+                      'Repeteix la contrasenya',
+                  obscure: true,
                 ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _signUp,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('Crear compte'),
+
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight:
+                          FontWeight.w500,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+
+                ElevatedButton(
+                  onPressed:
+                      _isLoading ? null : _signUp,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(
+                      vertical: 14,
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child:
+                                CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Crear compte',
+                          ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/login',
-                    (route) => false,
-                  );
-                },
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                  child: Text('Ja tinc compte'),
+
+                const SizedBox(height: 12),
+
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'Ja tinc compte',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -49,13 +50,14 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
   bool _showAnswer = false;
   String? _selectedOption;
   bool _savingError = false;
-  bool _timeFinishedHandledInThisPage = false;
+  bool _timeFinishedHandled = false;
 
   @override
   void initState() {
     super.initState();
 
-    if (widget.remainingSecondsNotifier.value > 0) {
+    if (widget.sessionId.isNotEmpty &&
+        widget.remainingSecondsNotifier.value > 0) {
       _startTimer();
     }
   }
@@ -63,19 +65,15 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
   PracticeItem? get _currentItem {
     if (widget.items.isEmpty) return null;
     if (_currentIndex >= widget.items.length) return null;
-
     return widget.items[_currentIndex];
   }
 
-  Future<void> _registerAttempt(bool isCorrect) async {
-    await _statsService.registerAttempt(
-      subjectId: widget.subject.id,
-      sessionId: widget.sessionId,
-      activityType: widget.type == PracticeActivityType.errorTest
-          ? (_currentItem?.type ?? widget.type)
-          : widget.type,
-      isCorrect: isCorrect,
-    );
+  bool get _isFlashcardMode {
+    final item = _currentItem;
+    if (item == null) return false;
+
+    return widget.type == PracticeActivityType.flashcards ||
+        item.type == PracticeActivityType.flashcards;
   }
 
   void _startTimer() {
@@ -101,19 +99,17 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
   }
 
   Future<void> _handleTimeFinished() async {
-    if (_timeFinishedHandledInThisPage) return;
+    if (_timeFinishedHandled) return;
+    _timeFinishedHandled = true;
 
-    _timeFinishedHandledInThisPage = true;
+    if (widget.sessionId.isEmpty) return;
+    if (widget.completionDialogShownNotifier.value) return;
+
+    widget.completionDialogShownNotifier.value = true;
 
     await widget.onTimeFinished();
 
     if (!mounted) return;
-
-    if (widget.completionDialogShownNotifier.value) {
-      return;
-    }
-
-    widget.completionDialogShownNotifier.value = true;
 
     final continuePracticing = await showDialog<bool>(
       context: context,
@@ -122,7 +118,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
         return AlertDialog(
           title: const Text('Pràctica completada'),
           content: const Text(
-            'Felicitats! Ja has completat el temps de pràctica d’avui.',
+            'Felicitats! Has completat aquesta sessió. Si tens més sessions pendents, en tornar a la pantalla de pràctica es carregarà la següent.',
           ),
           actions: [
             TextButton(
@@ -135,7 +131,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
               onPressed: () {
                 Navigator.pop(context, true);
               },
-              child: const Text('Seguir practicant'),
+              child: const Text('Següent sessió'),
             ),
           ],
         );
@@ -144,15 +140,23 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
 
     if (!mounted) return;
 
-    if (continuePracticing == false) {
-      Navigator.pop(context);
-    }
+    Navigator.pop(context, continuePracticing == true);
+  }
+
+  Future<void> _registerAttempt(bool isCorrect) async {
+    await _statsService.registerAttempt(
+      subjectId: widget.subject.id,
+      sessionId: widget.sessionId,
+      activityType: widget.type == PracticeActivityType.errorTest
+          ? (_currentItem?.type ?? widget.type)
+          : widget.type,
+      isCorrect: isCorrect,
+    );
   }
 
   String _formatTime(int secondsValue) {
     final minutes = secondsValue ~/ 60;
     final seconds = secondsValue % 60;
-
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
@@ -171,7 +175,6 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
 
   Future<void> _saveCurrentAsError() async {
     final item = _currentItem;
-
     if (item == null || _savingError) return;
 
     setState(() {
@@ -194,7 +197,6 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
 
   Future<void> _removeCurrentFromErrors() async {
     final item = _currentItem;
-
     if (item == null) return;
 
     await _errorService.removeError(
@@ -222,7 +224,11 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
   @override
   void dispose() {
     _timer?.cancel();
-    widget.onTick(widget.remainingSecondsNotifier.value);
+
+    if (widget.sessionId.isNotEmpty && !_timeFinishedHandled) {
+      widget.onTick(widget.remainingSecondsNotifier.value);
+    }
+
     super.dispose();
   }
 
@@ -234,7 +240,9 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'Temps restant: ${_formatTime(remainingSeconds)}',
+              widget.sessionId.isEmpty
+                  ? 'Pràctica extra fora de sessió'
+                  : 'Temps restant: ${_formatTime(remainingSeconds)}',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 22,
@@ -302,6 +310,110 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
     );
   }
 
+  Widget _buildFlashcardActivity() {
+    final item = _currentItem;
+
+    if (item == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'No hi ha flashcards disponibles.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTimer(),
+          const SizedBox(height: 16),
+          Text(
+            'Flashcard ${_currentIndex + 1}/${widget.items.length}',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Toca la targeta per girar-la. Arrossega a la dreta si la sabies o a l’esquerra si no la sabies.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _showAnswer = !_showAnswer;
+                });
+              },
+              onHorizontalDragEnd: (details) async {
+                final velocity = details.primaryVelocity ?? 0;
+
+                if (velocity > 250) {
+                  await _markCorrectAndNext();
+                } else if (velocity < -250) {
+                  await _markWrongAndNext();
+                }
+              },
+              child: Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 350),
+                  transitionBuilder: (child, animation) {
+                    final rotate = Tween<double>(
+                      begin: math.pi,
+                      end: 0,
+                    ).animate(animation);
+
+                    return AnimatedBuilder(
+                      animation: rotate,
+                      child: child,
+                      builder: (context, child) {
+                        return Transform(
+                          transform: Matrix4.rotationY(rotate.value),
+                          alignment: Alignment.center,
+                          child: child,
+                        );
+                      },
+                    );
+                  },
+                  child: _FlashcardFace(
+                    key: ValueKey(_showAnswer),
+                    text: _showAnswer ? item.answer : item.question,
+                    label: _showAnswer ? 'Resposta' : 'Pregunta',
+                    isAnswer: _showAnswer,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _savingError ? null : _markWrongAndNext,
+                  icon: const Icon(Icons.close),
+                  label: const Text('No ho sabia'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _markCorrectAndNext,
+                  icon: const Icon(Icons.check),
+                  label: const Text('Ho sabia'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRevealAnswerActivity() {
     final item = _currentItem;
 
@@ -317,6 +429,13 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
       );
     }
 
+    if (_isFlashcardMode) {
+      return _buildFlashcardActivity();
+    }
+
+    final isExerciseMode = widget.type == PracticeActivityType.exercises ||
+        item.type == PracticeActivityType.exercises;
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -325,7 +444,9 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
           _buildTimer(),
           const SizedBox(height: 16),
           Text(
-            'Pregunta ${_currentIndex + 1}/${widget.items.length}',
+            isExerciseMode
+                ? 'Exercici ${_currentIndex + 1}/${widget.items.length}'
+                : 'Pregunta ${_currentIndex + 1}/${widget.items.length}',
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
@@ -356,7 +477,9 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
                 _showAnswer = true;
               });
             },
-            child: const Text('Mostrar resposta'),
+            child: Text(
+              isExerciseMode ? 'Mostrar solució' : 'Mostrar resposta',
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -364,14 +487,18 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: _savingError ? null : _markWrongAndNext,
-                  child: const Text('No ho sabia'),
+                  child: Text(
+                    isExerciseMode ? 'No ho he resolt bé' : 'No ho sabia',
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton(
                   onPressed: _markCorrectAndNext,
-                  child: const Text('Ho sabia'),
+                  child: Text(
+                    isExerciseMode ? 'Ho he resolt bé' : 'Ho sabia',
+                  ),
                 ),
               ),
             ],
@@ -507,6 +634,8 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
         child = _buildErrorTestActivity();
         break;
       case PracticeActivityType.flashcards:
+        child = _buildFlashcardActivity();
+        break;
       case PracticeActivityType.openQuestions:
       case PracticeActivityType.exercises:
         child = _buildRevealAnswerActivity();
@@ -516,6 +645,69 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
     return AppScaffold(
       title: widget.type.title,
       child: child,
+    );
+  }
+}
+
+class _FlashcardFace extends StatelessWidget {
+  final String text;
+  final String label;
+  final bool isAnswer;
+
+  const _FlashcardFace({
+    super.key,
+    required this.text,
+    required this.label,
+    required this.isAnswer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(
+        minHeight: 300,
+        maxWidth: 520,
+      ),
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: isAnswer ? Colors.grey.shade800 : Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: Colors.grey.shade500,
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: isAnswer ? Colors.white70 : Colors.grey.shade600,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 22,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+              color: isAnswer ? Colors.white : Colors.grey.shade900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

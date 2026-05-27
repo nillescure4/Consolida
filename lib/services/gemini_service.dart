@@ -21,7 +21,7 @@ Ets un generador d'activitats d'estudi per una app de repetició espaiada.
 
 Normes obligatòries:
 - Utilitza NOMÉS el contingut importat.
-- No afegeixis coneixement extern.
+- No afegeixis coneixement extern per generar preguntes, resums o flashcards.
 - No inventis dades.
 - Respon només amb JSON vàlid.
 - No escriguis Markdown.
@@ -33,7 +33,17 @@ Has de generar:
 - flashcards: 12.
 - multipleChoiceQuestions: 10 preguntes tipus test amb exactament 4 opcions.
 - openQuestions: 8.
-- exercises: fins a 6, només si el contingut permet exercicis.
+- exercises: NOMÉS si detectes que algun fitxer importat conté exercicis reals.
+
+Regles molt importants per a exercises:
+- NO generis exercicis nous.
+- L'apartat exercises només pot contenir exercicis que apareguin als fitxers importats.
+- Si cap fitxer conté exercicis, retorna "exercises": [].
+- Cada exercise ha de ser l'enunciat real detectat al fitxer.
+- sourceFileName ha de ser el nom exacte del fitxer on apareix l'exercici.
+- Si el fitxer inclou solució o resposta de l'exercici, copia-la a solution i posa solutionGeneratedByAi=false.
+- Si el fitxer conté l'exercici però NO conté la solució, llavors pots generar la solució amb IA i has de posar solutionGeneratedByAi=true.
+- Si tens dubtes sobre si una cosa és exercici, no l'incloguis.
 
 Format JSON exacte:
 
@@ -66,16 +76,13 @@ Format JSON exacte:
   ],
   "exercises": [
     {
-      "exercise": "exercici basat només en el contingut",
-      "solution": "solució basada només en el contingut"
+      "sourceFileName": "nom exacte del fitxer",
+      "exercise": "enunciat real de l'exercici detectat al fitxer",
+      "solution": "solució del fitxer o solució generada si el fitxer no en té",
+      "solutionGeneratedByAi": false
     }
   ]
 }
-
-Molt important:
-- documentSummaries ha de tenir una entrada per cada fitxer que apareix com FITXER.
-- correctAnswer ha de coincidir exactament amb una opció de options.
-- No deixis multipleChoiceQuestions buit si hi ha prou contingut.
 
 <contingut_importat>
 $importedText
@@ -100,7 +107,7 @@ $importedText
           }
         ],
         'generationConfig': {
-          'temperature': 0.15,
+          'temperature': 0.1,
           'responseMimeType': 'application/json',
         },
       }),

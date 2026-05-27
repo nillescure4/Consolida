@@ -59,21 +59,25 @@ class _PracticePageState extends State<PracticePage> {
     _completionDialogShownNotifier?.dispose();
 
     _activeSessionId = timerState.sessionId;
+
     _remainingSecondsNotifier = ValueNotifier<int>(
       timerState.remainingSeconds,
     );
-    _completionDialogShownNotifier = ValueNotifier<bool>(
-      timerState.completedToday,
-    );
+
+    _completionDialogShownNotifier = ValueNotifier<bool>(false);
   }
 
-  void _clearTimer() {
+  void _resetLocalTimer() {
     _remainingSecondsNotifier?.dispose();
     _completionDialogShownNotifier?.dispose();
 
     _remainingSecondsNotifier = null;
     _completionDialogShownNotifier = null;
     _activeSessionId = null;
+  }
+
+  void _clearTimer() {
+    _resetLocalTimer();
   }
 
   String _formatTime(int secondsValue) {
@@ -83,10 +87,16 @@ class _PracticePageState extends State<PracticePage> {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  String _formatDate(DateTime? date) {
+    if (date == null) return '-';
+
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
   Future<void> _persistRemainingSeconds(int remainingSeconds) async {
     final sessionId = _activeSessionId;
 
-    if (sessionId == null) return;
+    if (sessionId == null || sessionId.isEmpty) return;
 
     await _objectiveService.updateRemainingSeconds(
       subjectId: widget.subject.id,
@@ -98,7 +108,7 @@ class _PracticePageState extends State<PracticePage> {
   Future<void> _markPracticeCompletedToday() async {
     final sessionId = _activeSessionId;
 
-    if (sessionId == null) return;
+    if (sessionId == null || sessionId.isEmpty) return;
 
     await _objectiveService.completePracticeSession(
       subjectId: widget.subject.id,
@@ -106,8 +116,10 @@ class _PracticePageState extends State<PracticePage> {
       sessionId: sessionId,
     );
 
-    if (_remainingSecondsNotifier != null) {
-      _remainingSecondsNotifier!.value = 0;
+    _resetLocalTimer();
+
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -131,7 +143,7 @@ class _PracticePageState extends State<PracticePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Activitats generades: ${activity.flashcards.length} flashcards, ${activity.multipleChoiceQuestions.length} test, ${activity.openQuestions.length} obertes.',
+            'Activitats generades: ${activity.flashcards.length} flashcards, ${activity.multipleChoiceQuestions.length} test, ${activity.openQuestions.length} obertes i ${activity.exercises.length} exercicis detectats.',
           ),
         ),
       );
@@ -152,11 +164,11 @@ class _PracticePageState extends State<PracticePage> {
     }
   }
 
-  void _openActivity({
+  Future<void> _openActivity({
     required PracticeActivityType type,
     required AiGeneratedActivity activity,
     required List<PracticeItem> errorItems,
-  }) {
+  }) async {
     final remainingSecondsNotifier = _remainingSecondsNotifier;
     final completionDialogShownNotifier = _completionDialogShownNotifier;
 
@@ -220,8 +232,13 @@ class _PracticePageState extends State<PracticePage> {
             .map(
               (exercise) => PracticeItem(
                 type: PracticeActivityType.exercises,
-                question: exercise.exercise,
-                answer: exercise.solution,
+                question: exercise.sourceFileName.trim().isEmpty
+                    ? exercise.exercise
+                    : 'Fitxer: ${exercise.sourceFileName}\n\n${exercise.exercise}',
+                answer: exercise.solutionGeneratedByAi
+                    ? '${exercise.solution}\n\nAvís: aquesta resposta ha estat generada per la IA perquè el fitxer importat no contenia una solució explícita.'
+                    : exercise.solution,
+                sourceFileName: exercise.sourceFileName,
               ),
             )
             .toList();
@@ -232,7 +249,7 @@ class _PracticePageState extends State<PracticePage> {
         break;
     }
 
-    Navigator.push(
+    final goToNextSession = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => PracticeActivityPage(
@@ -249,6 +266,13 @@ class _PracticePageState extends State<PracticePage> {
         ),
       ),
     );
+
+    if (!mounted) return;
+
+    if (goToNextSession == true) {
+      _resetLocalTimer();
+      setState(() {});
+    }
   }
 
   Future<void> _confirmRegenerate(
@@ -301,30 +325,59 @@ class _PracticePageState extends State<PracticePage> {
             child: Column(
               children: [
                 Text(
-                  'Temps restant de la sessió',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  timerState.hasDueSession ? 'Sessió activa' : 'Pràctica lliure',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
+                if (timerState.hasDueSession) ...[
+                  Text(
+                    'Objectiu: ${timerState.goalTitle}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Sessió prevista: ${_formatDate(timerState.scheduledDate)}',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Temps restant'),
+                ] else ...[
+                  const Text(
+                    'No tens cap sessió pendent ara mateix.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 Text(
                   _formatTime(remainingSeconds),
                   style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (timerState.completedToday || remainingSeconds == 0)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Pràctica d’avui completada',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildNoPendingPracticeMessage() {
+    return const Card(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Text(
+          'Ara mateix no tens cap pràctica pendent. Pots practicar igualment, però aquesta pràctica extra no consumirà temps d’una sessió programada.',
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 
@@ -385,8 +438,7 @@ class _PracticePageState extends State<PracticePage> {
                   widget.subject.id,
                 ),
                 builder: (context, timerSnapshot) {
-                  if (timerSnapshot.connectionState ==
-                      ConnectionState.waiting) {
+                  if (timerSnapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
@@ -398,20 +450,6 @@ class _PracticePageState extends State<PracticePage> {
                         hasDueSession: false,
                         completedToday: false,
                       );
-
-                  if (!timerState.canPractice) {
-                    _clearTimer();
-
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text(
-                          'Ara mateix no tens cap sessió pendent.\n\nEl temporitzador tornarà a aparèixer quan toqui una nova sessió programada.',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    );
-                  }
 
                   _syncTimerWithFirestoreState(timerState);
 
@@ -428,10 +466,22 @@ class _PracticePageState extends State<PracticePage> {
                           final errorItems = errorsSnapshot.data ?? [];
 
                           if (activity == null) {
-                            return _NoGeneratedActivitiesView(
-                              materialsCount: materials.length,
-                              isGenerating: _isGenerating,
-                              onGenerate: () => _generateActivities(materials),
+                            return ListView(
+                              padding: const EdgeInsets.all(16),
+                              children: [
+                                _buildTimerHeader(timerState),
+                                const SizedBox(height: 16),
+                                if (!timerState.hasDueSession) ...[
+                                  _buildNoPendingPracticeMessage(),
+                                  const SizedBox(height: 16),
+                                ],
+                                _NoGeneratedActivitiesView(
+                                  materialsCount: materials.length,
+                                  isGenerating: _isGenerating,
+                                  onGenerate: () =>
+                                      _generateActivities(materials),
+                                ),
+                              ],
                             );
                           }
 
@@ -450,13 +500,19 @@ class _PracticePageState extends State<PracticePage> {
                             children: [
                               _buildTimerHeader(timerState),
                               const SizedBox(height: 16),
+                              if (!timerState.hasDueSession) ...[
+                                _buildNoPendingPracticeMessage(),
+                                const SizedBox(height: 16),
+                              ],
                               Text(
                                 'Tria una modalitat de pràctica',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Durada de la sessió: ${timerState.durationMinutes} minuts',
+                                timerState.hasDueSession
+                                    ? 'Estàs fent una sessió de l’objectiu: ${timerState.goalTitle}'
+                                    : 'Pràctica extra fora de planificació',
                               ),
                               const SizedBox(height: 8),
                               Text(
@@ -479,9 +535,7 @@ class _PracticePageState extends State<PracticePage> {
                                 type: PracticeActivityType.summary,
                                 count: activity.documentSummaries.isNotEmpty
                                     ? activity.documentSummaries.length
-                                    : (activity.summary.trim().isEmpty
-                                        ? 0
-                                        : 1),
+                                    : (activity.summary.trim().isEmpty ? 0 : 1),
                                 enabled: activity.summary.trim().isNotEmpty ||
                                     activity.documentSummaries.isNotEmpty,
                                 onTap: () => _openActivity(
@@ -596,7 +650,11 @@ class _NoGeneratedActivitiesView extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 child: isGenerating
-                    ? const CircularProgressIndicator()
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('Generar activitats amb Gemini'),
               ),
             ),
