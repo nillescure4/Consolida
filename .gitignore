@@ -47,3 +47,5 @@ app.*.map.json
 
 # Gemini API key
 lib/config/api_keys.dart
+comandes.txt
+usuaris_proves.txt

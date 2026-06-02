@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/auth_service.dart';
 import '../utils/auth_error_translator.dart';
 
 class SignUpPage extends StatefulWidget {
@@ -12,10 +13,13 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _repeatPasswordController = TextEditingController();
+  final AuthService _authService = AuthService();
+
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _repeatPasswordController =
+      TextEditingController();
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -29,12 +33,11 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
-  Future<void> _signUp() async {
+  Future<void> _signUpWithEmail() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    final repeatPassword =
-        _repeatPasswordController.text.trim();
+    final repeatPassword = _repeatPasswordController.text.trim();
 
     if (name.isEmpty) {
       setState(() {
@@ -57,8 +60,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
     try {
       final credential =
-          await FirebaseAuth.instance
-              .createUserWithEmailAndPassword(
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -75,6 +77,7 @@ class _SignUpPageState extends State<SignUpPage> {
           'name': name,
           'email': email,
           'createdAt': FieldValue.serverTimestamp(),
+          'provider': 'password',
         });
       }
 
@@ -110,6 +113,37 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
+  Future<void> _signUpWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await _authService.signInWithGoogle();
+
+      if (!mounted) return;
+
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/home',
+        (route) => false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = 'No s’ha pogut crear el compte amb Google.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   Widget _buildField({
     required TextEditingController controller,
     required String label,
@@ -130,6 +164,21 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 
+  Widget _socialButton({
+    required String text,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: _isLoading ? null : onPressed,
+      icon: Icon(icon),
+      label: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Text(text),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -137,12 +186,9 @@ class _SignUpPageState extends State<SignUpPage> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 420,
-            ),
+            constraints: const BoxConstraints(maxWidth: 420),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
                   'Crear compte',
@@ -152,35 +198,26 @@ class _SignUpPageState extends State<SignUpPage> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-
                 const SizedBox(height: 30),
-
                 _buildField(
                   controller: _nameController,
                   label: 'Nom',
                 ),
-
                 _buildField(
                   controller: _emailController,
                   label: 'Correu electrònic',
-                  keyboardType:
-                      TextInputType.emailAddress,
+                  keyboardType: TextInputType.emailAddress,
                 ),
-
                 _buildField(
                   controller: _passwordController,
                   label: 'Contrasenya',
                   obscure: true,
                 ),
-
                 _buildField(
-                  controller:
-                      _repeatPasswordController,
-                  label:
-                      'Repeteix la contrasenya',
+                  controller: _repeatPasswordController,
+                  label: 'Repeteix la contrasenya',
                   obscure: true,
                 ),
-
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 8),
                   Text(
@@ -188,46 +225,36 @@ class _SignUpPageState extends State<SignUpPage> {
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Colors.red,
-                      fontWeight:
-                          FontWeight.w500,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
-
                 const SizedBox(height: 24),
-
                 ElevatedButton(
-                  onPressed:
-                      _isLoading ? null : _signUp,
+                  onPressed: _isLoading ? null : _signUpWithEmail,
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(
-                      vertical: 14,
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     child: _isLoading
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child:
-                                CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text(
-                            'Crear compte',
-                          ),
+                        : const Text('Crear compte'),
                   ),
                 ),
-
+                const SizedBox(height: 16),
+                _socialButton(
+                  text: 'Continuar amb Google',
+                  icon: Icons.g_mobiledata,
+                  onPressed: _signUpWithGoogle,
+                ),
                 const SizedBox(height: 12),
-
                 TextButton(
                   onPressed: () {
                     Navigator.pop(context);
                   },
-                  child: const Text(
-                    'Ja tinc compte',
-                  ),
+                  child: const Text('Ja tinc compte'),
                 ),
               ],
             ),
