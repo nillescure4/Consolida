@@ -12,11 +12,9 @@ class ObjectiveService {
 
   String get userId {
     final user = _auth.currentUser;
-
     if (user == null) {
       throw Exception('No hi ha usuari autenticat.');
     }
-
     return user.uid;
   }
 
@@ -45,9 +43,8 @@ class ObjectiveService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => StudyGoal.fromFirestore(doc))
-              .toList(),
+          (snapshot) =>
+              snapshot.docs.map((doc) => StudyGoal.fromFirestore(doc)).toList(),
         );
   }
 
@@ -68,12 +65,11 @@ class ObjectiveService {
       final todayOnly = DateTime(now.year, now.month, now.day);
 
       final duePendingSessions = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-      QueryDocumentSnapshot<Map<String, dynamic>>? completedTodaySession;
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
-
         final scheduledDateRaw = data['scheduledDate'];
+
         if (scheduledDateRaw is! Timestamp) continue;
 
         final scheduledDate = scheduledDateRaw.toDate();
@@ -91,27 +87,11 @@ class ObjectiveService {
         if (status == 'pending' && isTodayOrPast) {
           duePendingSessions.add(doc);
         }
-
-        final completedAtRaw = data['completedAt'];
-
-        if (status == 'completed' && completedAtRaw is Timestamp) {
-          final completedAt = completedAtRaw.toDate();
-          final completedOnly = DateTime(
-            completedAt.year,
-            completedAt.month,
-            completedAt.day,
-          );
-
-          if (completedOnly.isAtSameMomentAs(todayOnly)) {
-            completedTodaySession ??= doc;
-          }
-        }
       }
 
       duePendingSessions.sort((a, b) {
         final aDate = (a.data()['scheduledDate'] as Timestamp).toDate();
         final bDate = (b.data()['scheduledDate'] as Timestamp).toDate();
-
         return aDate.compareTo(bDate);
       });
 
@@ -127,8 +107,6 @@ class ObjectiveService {
             ? data['remainingSeconds'] as int
             : durationMinutes * 60;
 
-        final scheduledDate = (data['scheduledDate'] as Timestamp).toDate();
-
         return PracticeTimerState(
           sessionId: session.id,
           remainingSeconds: remainingSeconds,
@@ -136,28 +114,7 @@ class ObjectiveService {
           hasDueSession: true,
           completedToday: false,
           goalTitle: data['goalTitle'] ?? 'Objectiu',
-          scheduledDate: scheduledDate,
-        );
-      }
-
-      if (completedTodaySession != null) {
-        final data = completedTodaySession.data();
-
-        final durationMinutes = data['durationMinutes'] is int
-            ? data['durationMinutes'] as int
-            : 30;
-
-        final scheduledDateRaw = data['scheduledDate'];
-
-        return PracticeTimerState(
-          sessionId: completedTodaySession.id,
-          remainingSeconds: 0,
-          durationMinutes: durationMinutes,
-          hasDueSession: false,
-          completedToday: true,
-          goalTitle: data['goalTitle'] ?? 'Objectiu',
-          scheduledDate:
-              scheduledDateRaw is Timestamp ? scheduledDateRaw.toDate() : null,
+          scheduledDate: (data['scheduledDate'] as Timestamp).toDate(),
         );
       }
 
@@ -178,15 +135,13 @@ class ObjectiveService {
     required List<DateTime> dates,
   }) async {
     final goalRef = goalsCollection(subjectId).doc();
-
     final batch = _firestore.batch();
 
     batch.set(goalRef, {
       'title': goal.title,
       'type': goal.type.name,
-      'targetDate': goal.targetDate == null
-          ? null
-          : Timestamp.fromDate(goal.targetDate!),
+      'targetDate':
+          goal.targetDate == null ? null : Timestamp.fromDate(goal.targetDate!),
       'minutesPerSession': goal.minutesPerSession,
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -201,7 +156,6 @@ class ObjectiveService {
         'durationMinutes': goal.minutesPerSession,
         'remainingSeconds': goal.minutesPerSession * 60,
         'status': 'pending',
-        'emailSent': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
@@ -209,7 +163,6 @@ class ObjectiveService {
     await batch.commit();
 
     final today = DateTime.now();
-
     final hasPracticeToday = dates.any((date) {
       return date.year == today.year &&
           date.month == today.month &&
@@ -229,65 +182,64 @@ class ObjectiveService {
     );
   }
 
-  Future<void> schedulePendingPracticeNotificationForSubject({
+  Future<void> addPracticeSession({
     required String subjectId,
     required String subjectName,
+    required String goalId,
+    required String goalTitle,
+    required DateTime scheduledDate,
+    required int durationMinutes,
   }) async {
-    final pendingSession = await _getNextDuePendingSession(subjectId);
+    await sessionsCollection(subjectId).add({
+      'goalId': goalId,
+      'goalTitle': goalTitle,
+      'scheduledDate': Timestamp.fromDate(scheduledDate),
+      'durationMinutes': durationMinutes,
+      'remainingSeconds': durationMinutes * 60,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
-    if (pendingSession == null) {
-      await NotificationService.cancelSubjectNotifications(subjectId);
-      return;
-    }
-
-    final goalTitle = pendingSession.data()['goalTitle'] ?? 'Objectiu';
-
-    await NotificationService.scheduleDailyPendingPracticeNotification(
+    await schedulePendingPracticeNotificationForSubject(
       subjectId: subjectId,
       subjectName: subjectName,
-      goalTitle: goalTitle,
-      hour: 9,
-      minute: 0,
     );
   }
 
-  Future<QueryDocumentSnapshot<Map<String, dynamic>>?> _getNextDuePendingSession(
-    String subjectId,
-  ) async {
-    final snapshot = await sessionsCollection(subjectId)
-        .where('status', isEqualTo: 'pending')
-        .get();
-
-    final now = DateTime.now();
-    final todayOnly = DateTime(now.year, now.month, now.day);
-
-    final dueSessions = snapshot.docs.where((doc) {
-      final data = doc.data();
-      final scheduledDateRaw = data['scheduledDate'];
-
-      if (scheduledDateRaw is! Timestamp) return false;
-
-      final scheduledDate = scheduledDateRaw.toDate();
-      final scheduledDateOnly = DateTime(
-        scheduledDate.year,
-        scheduledDate.month,
-        scheduledDate.day,
-      );
-
-      return scheduledDateOnly.isBefore(todayOnly) ||
-          scheduledDateOnly.isAtSameMomentAs(todayOnly);
-    }).toList();
-
-    dueSessions.sort((a, b) {
-      final aDate = (a.data()['scheduledDate'] as Timestamp).toDate();
-      final bDate = (b.data()['scheduledDate'] as Timestamp).toDate();
-
-      return aDate.compareTo(bDate);
+  Future<void> updatePracticeSession({
+    required String subjectId,
+    required String subjectName,
+    required String sessionId,
+    required DateTime scheduledDate,
+    required int durationMinutes,
+    required bool completed,
+  }) async {
+    await sessionsCollection(subjectId).doc(sessionId).update({
+      'scheduledDate': Timestamp.fromDate(scheduledDate),
+      'durationMinutes': durationMinutes,
+      'remainingSeconds': completed ? 0 : durationMinutes * 60,
+      'status': completed ? 'completed' : 'pending',
+      'completedAt': completed ? FieldValue.serverTimestamp() : null,
+      'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    if (dueSessions.isEmpty) return null;
+    await schedulePendingPracticeNotificationForSubject(
+      subjectId: subjectId,
+      subjectName: subjectName,
+    );
+  }
 
-    return dueSessions.first;
+  Future<void> deletePracticeSession({
+    required String subjectId,
+    required String subjectName,
+    required String sessionId,
+  }) async {
+    await sessionsCollection(subjectId).doc(sessionId).delete();
+
+    await schedulePendingPracticeNotificationForSubject(
+      subjectId: subjectId,
+      subjectName: subjectName,
+    );
   }
 
   Future<void> updateRemainingSeconds({
@@ -338,37 +290,66 @@ class ObjectiveService {
 
     await batch.commit();
 
-    await cleanOrphanPracticeSessions(subjectId);
-
     await schedulePendingPracticeNotificationForSubject(
       subjectId: subjectId,
       subjectName: subjectName,
     );
   }
 
-  Future<void> cleanOrphanPracticeSessions(String subjectId) async {
-    final goalsSnapshot = await goalsCollection(subjectId).get();
-    final existingGoalIds = goalsSnapshot.docs.map((doc) => doc.id).toSet();
+  Future<void> schedulePendingPracticeNotificationForSubject({
+    required String subjectId,
+    required String subjectName,
+  }) async {
+    final pendingSession = await _getNextDuePendingSession(subjectId);
 
-    final sessionsSnapshot = await sessionsCollection(subjectId).get();
-
-    final batch = _firestore.batch();
-    bool hasUpdates = false;
-
-    for (final sessionDoc in sessionsSnapshot.docs) {
-      final data = sessionDoc.data();
-      final goalId = data['goalId'];
-
-      if (goalId == null ||
-          goalId is! String ||
-          !existingGoalIds.contains(goalId)) {
-        batch.delete(sessionDoc.reference);
-        hasUpdates = true;
-      }
+    if (pendingSession == null) {
+      await NotificationService.cancelSubjectNotifications(subjectId);
+      return;
     }
 
-    if (hasUpdates) {
-      await batch.commit();
-    }
+    await NotificationService.scheduleDailyPendingPracticeNotification(
+      subjectId: subjectId,
+      subjectName: subjectName,
+      goalTitle: pendingSession.data()['goalTitle'] ?? 'Objectiu',
+      hour: 9,
+      minute: 0,
+    );
+  }
+
+  Future<QueryDocumentSnapshot<Map<String, dynamic>>?> _getNextDuePendingSession(
+    String subjectId,
+  ) async {
+    final snapshot = await sessionsCollection(subjectId)
+        .where('status', isEqualTo: 'pending')
+        .get();
+
+    final now = DateTime.now();
+    final todayOnly = DateTime(now.year, now.month, now.day);
+
+    final dueSessions = snapshot.docs.where((doc) {
+      final scheduledDateRaw = doc.data()['scheduledDate'];
+
+      if (scheduledDateRaw is! Timestamp) return false;
+
+      final scheduledDate = scheduledDateRaw.toDate();
+      final scheduledDateOnly = DateTime(
+        scheduledDate.year,
+        scheduledDate.month,
+        scheduledDate.day,
+      );
+
+      return scheduledDateOnly.isBefore(todayOnly) ||
+          scheduledDateOnly.isAtSameMomentAs(todayOnly);
+    }).toList();
+
+    dueSessions.sort((a, b) {
+      final aDate = (a.data()['scheduledDate'] as Timestamp).toDate();
+      final bDate = (b.data()['scheduledDate'] as Timestamp).toDate();
+      return aDate.compareTo(bDate);
+    });
+
+    if (dueSessions.isEmpty) return null;
+
+    return dueSessions.first;
   }
 }
