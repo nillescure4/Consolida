@@ -131,6 +131,18 @@ class _PracticePageState extends State<PracticePage> {
     try {
       final activity = await _geminiService.generateActivitiesFromMaterials(
         materials: materials,
+        onFlashOverloaded: () {
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Gemini Flash està saturat temporalment. Ho intentem automàticament amb Gemini Flash-Lite.',
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        },
       );
 
       await _aiActivityService.saveActivity(
@@ -145,6 +157,17 @@ class _PracticePageState extends State<PracticePage> {
           content: Text(
             'Activitats generades: ${activity.flashcards.length} flashcards, ${activity.multipleChoiceQuestions.length} test, ${activity.openQuestions.length} obertes i ${activity.exercises.length} exercicis detectats.',
           ),
+        ),
+      );
+    } on GeminiOverloadedException {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ara mateix la API de Gemini està massa saturada. Torna-ho a provar més tard.',
+          ),
+          duration: Duration(seconds: 5),
         ),
       );
     } catch (error) {

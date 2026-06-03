@@ -6,8 +6,9 @@ class PracticeSession {
   final String goalTitle;
   final DateTime scheduledDate;
   final int durationMinutes;
+  final int remainingSeconds;
   final String status;
-  final bool emailSent;
+  final DateTime? completedAt;
 
   const PracticeSession({
     required this.id,
@@ -15,37 +16,35 @@ class PracticeSession {
     required this.goalTitle,
     required this.scheduledDate,
     required this.durationMinutes,
+    required this.remainingSeconds,
     required this.status,
-    required this.emailSent,
+    this.completedAt,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'goalId': goalId,
-      'goalTitle': goalTitle,
-      'scheduledDate': Timestamp.fromDate(scheduledDate),
-      'durationMinutes': durationMinutes,
-      'status': status,
-      'emailSent': emailSent,
-      'createdAt': FieldValue.serverTimestamp(),
-    };
-  }
+  bool get isCompleted => status == 'completed';
 
   factory PracticeSession.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
-    final data = doc.data();
+    final data = doc.data() ?? {};
 
     return PracticeSession(
       id: doc.id,
-      goalId: data?['goalId'] ?? '',
-      goalTitle: data?['goalTitle'] ?? '',
-      scheduledDate: data?['scheduledDate'] is Timestamp
-          ? (data?['scheduledDate'] as Timestamp).toDate()
+      goalId: data['goalId'] ?? '',
+      goalTitle: data['goalTitle'] ?? '',
+      scheduledDate: data['scheduledDate'] is Timestamp
+          ? (data['scheduledDate'] as Timestamp).toDate()
           : DateTime.now(),
-      durationMinutes: data?['durationMinutes'] ?? 30,
-      status: data?['status'] ?? 'pending',
-      emailSent: data?['emailSent'] ?? false,
+      durationMinutes: data['durationMinutes'] is int
+          ? data['durationMinutes'] as int
+          : 30,
+      remainingSeconds: data['remainingSeconds'] is int
+          ? data['remainingSeconds'] as int
+          : 1800,
+      status: data['status'] ?? 'pending',
+      completedAt: data['completedAt'] is Timestamp
+          ? (data['completedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 }
