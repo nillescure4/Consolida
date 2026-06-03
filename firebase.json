@@ -1,1 +1,39 @@
-{"flutter":{"platforms":{"dart":{"lib/firebase_options.dart":{"projectId":"consolida-app","configurations":{"android":"1:302553443829:android:7cde8219f01220921c04bc","ios":"1:302553443829:ios:f614c6d4c725d8db1c04bc","macos":"1:302553443829:ios:f614c6d4c725d8db1c04bc","web":"1:302553443829:web:e810601f46fffb4e1c04bc","windows":"1:302553443829:web:6b3abda4711b43461c04bc"}}},"android":{"default":{"projectId":"consolida-app","appId":"1:302553443829:android:7cde8219f01220921c04bc","fileOutput":"android/app/google-services.json"}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "consolida-app",
+          "configurations": {
+            "android": "1:302553443829:android:7cde8219f01220921c04bc",
+            "ios": "1:302553443829:ios:f614c6d4c725d8db1c04bc",
+            "macos": "1:302553443829:ios:f614c6d4c725d8db1c04bc",
+            "web": "1:302553443829:web:e810601f46fffb4e1c04bc",
+            "windows": "1:302553443829:web:6b3abda4711b43461c04bc"
+          }
+        }
+      },
+      "android": {
+        "default": {
+          "projectId": "consolida-app",
+          "appId": "1:302553443829:android:7cde8219f01220921c04bc",
+          "fileOutput": "android/app/google-services.json"
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

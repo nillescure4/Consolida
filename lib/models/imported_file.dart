@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ImportedFile {
@@ -8,6 +10,9 @@ class ImportedFile {
   final int sizeBytes;
   final DateTime? createdAt;
 
+  // AFEGIR
+  final Uint8List? bytes;
+
   const ImportedFile({
     required this.id,
     required this.name,
@@ -15,6 +20,9 @@ class ImportedFile {
     required this.type,
     required this.sizeBytes,
     this.createdAt,
+
+    // AFEGIR
+    this.bytes,
   });
 
   factory ImportedFile.fromFirestore(
@@ -31,6 +39,9 @@ class ImportedFile {
       createdAt: data?['createdAt'] is Timestamp
           ? (data?['createdAt'] as Timestamp).toDate()
           : null,
+
+      // Firestore no guarda els bytes
+      bytes: null,
     );
   }
 }

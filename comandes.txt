@@ -5,3 +5,7 @@ flutter run -d emulator-5554
 flutter clean
 rm -rf build
 flutter run -d chrome
+
+
+flutter build web
+firebase deploy

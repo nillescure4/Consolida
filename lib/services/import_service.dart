@@ -1,10 +1,6 @@
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../models/imported_file.dart';
 
@@ -58,7 +54,7 @@ class ImportService {
   Future<ImportedFile?> pickAndSaveFileLocally(String subjectId) async {
     final result = await FilePicker.pickFiles(
       allowMultiple: false,
-      withData: false,
+      withData: true,
       type: FileType.custom,
       allowedExtensions: [
         'pdf',
@@ -72,54 +68,18 @@ class ImportService {
     }
 
     final pickedFile = result.files.single;
+    final bytes = pickedFile.bytes;
 
-    if (pickedFile.path == null) {
-      throw Exception('No s’ha pogut llegir la ruta del fitxer.');
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('No s’ha pogut llegir el contingut del fitxer.');
     }
 
-    final originalFile = File(pickedFile.path!);
-
-    if (!await originalFile.exists()) {
-      throw Exception('El fitxer seleccionat no existeix.');
-    }
-
-    final appDirectory = await getApplicationDocumentsDirectory();
-
-    final subjectDirectory = Directory(
-      p.join(
-        appDirectory.path,
-        'consolida',
-        'users',
-        userId,
-        'subjects',
-        subjectId,
-        'imported_files',
-      ),
-    );
-
-    if (!await subjectDirectory.exists()) {
-      await subjectDirectory.create(recursive: true);
-    }
-
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-
-    final safeFileName = pickedFile.name.replaceAll(
-      RegExp(r'[\\/:*?"<>|]'),
-      '_',
-    );
-
-    final localFilePath = p.join(
-      subjectDirectory.path,
-      '${timestamp}_$safeFileName',
-    );
-
-    final copiedFile = await originalFile.copy(localFilePath);
-
-    final fileExtension = pickedFile.extension ?? 'unknown';
+    final fileExtension =
+        (pickedFile.extension ?? pickedFile.name.split('.').last).toLowerCase();
 
     final docRef = await filesCollection(subjectId).add({
       'name': pickedFile.name,
-      'localPath': copiedFile.path,
+      'localPath': '',
       'type': fileExtension,
       'sizeBytes': pickedFile.size,
       'createdAt': FieldValue.serverTimestamp(),
@@ -128,10 +88,11 @@ class ImportService {
     return ImportedFile(
       id: docRef.id,
       name: pickedFile.name,
-      localPath: copiedFile.path,
+      localPath: '',
       type: fileExtension,
       sizeBytes: pickedFile.size,
       createdAt: DateTime.now(),
+      bytes: bytes,
     );
   }
 
@@ -139,12 +100,6 @@ class ImportService {
     required String subjectId,
     required ImportedFile file,
   }) async {
-    final localFile = File(file.localPath);
-
-    if (await localFile.exists()) {
-      await localFile.delete();
-    }
-
     final processedSnapshot = await processedMaterialsCollection(subjectId)
         .where('fileId', isEqualTo: file.id)
         .get();

@@ -274,33 +274,67 @@ class _MetricGrid extends StatelessWidget {
     required this.stats,
   });
 
+  int _crossAxisCount(double width) {
+    if (width >= 1100) return 4;
+    return 2;
+  }
+
+  double _maxContentWidth(double width) {
+    if (width >= 1100) return 1000;
+    if (width >= 700) return 680;
+    return double.infinity;
+  }
+
+  double _childAspectRatio(double width) {
+    if (width >= 1100) return 1.25;
+    if (width >= 700) return 1.35;
+    return 1.6;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.6,
-      children: [
-        _MetricCard(
-          title: 'Dies practicats',
-          value: stats.completedSessions.toString(),
-        ),
-        _MetricCard(
-          title: 'Sessions pendents',
-          value: stats.pendingSessions.toString(),
-        ),
-        _MetricCard(
-          title: 'Dies fins data límit',
-          value: stats.daysUntilTarget < 0
-              ? 'Sense límit'
-              : stats.daysUntilTarget.toString(),
-        ),
-        _MetricCard(
-          title: 'Progrés total',
-          value: '${(stats.completionRate * 100).round()}%',
-        ),
-      ],
+    final cards = [
+      _MetricCard(
+        title: 'Dies practicats',
+        value: stats.completedSessions.toString(),
+      ),
+      _MetricCard(
+        title: 'Sessions pendents',
+        value: stats.pendingSessions.toString(),
+      ),
+      _MetricCard(
+        title: 'Dies fins data límit',
+        value: stats.daysUntilTarget < 0
+            ? 'Sense límit'
+            : stats.daysUntilTarget.toString(),
+      ),
+      _MetricCard(
+        title: 'Progrés total',
+        value: '${(stats.completionRate * 100).round()}%',
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: _maxContentWidth(width),
+            ),
+            child: GridView.count(
+              crossAxisCount: _crossAxisCount(width),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: _childAspectRatio(width),
+              children: cards,
+            ),
+          ),
+        );
+      },
     );
   }
 }

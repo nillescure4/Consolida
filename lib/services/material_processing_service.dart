@@ -1,9 +1,9 @@
-import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:archive/archive_io.dart';
+import 'package:archive/archive.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:read_pdf_text/read_pdf_text.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:xml/xml.dart';
 
 import '../models/imported_file.dart';
@@ -50,7 +50,6 @@ class MaterialProcessingService {
     required ImportedFile file,
   }) async {
     final extractedText = await extractTextFromFile(file);
-
     final cleanedText = _cleanText(extractedText);
 
     if (cleanedText.trim().isEmpty) {
@@ -71,21 +70,21 @@ class MaterialProcessingService {
 
   Future<String> extractTextFromFile(ImportedFile file) async {
     final extension = file.type.toLowerCase();
-    final localFile = File(file.localPath);
+    final bytes = file.bytes;
 
-    if (!await localFile.exists()) {
-      throw Exception('El fitxer no existeix al dispositiu.');
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('No s’ha pogut llegir el contingut del fitxer.');
     }
 
     switch (extension) {
       case 'txt':
-        return localFile.readAsString();
+        return String.fromCharCodes(bytes);
 
       case 'pdf':
-        return ReadPdfText.getPDFtext(file.localPath);
+        return _extractTextFromPdf(bytes);
 
       case 'docx':
-        return _extractTextFromDocx(localFile);
+        return _extractTextFromDocx(bytes);
 
       default:
         throw Exception(
@@ -94,10 +93,15 @@ class MaterialProcessingService {
     }
   }
 
-  Future<String> _extractTextFromDocx(File file) async {
-    final bytes = await file.readAsBytes();
-    final archive = ZipDecoder().decodeBytes(bytes);
+  String _extractTextFromPdf(Uint8List bytes) {
+    final document = PdfDocument(inputBytes: bytes);
+    final text = PdfTextExtractor(document).extractText();
+    document.dispose();
+    return text;
+  }
 
+  String _extractTextFromDocx(Uint8List bytes) {
+    final archive = ZipDecoder().decodeBytes(bytes);
     final documentFile = archive.findFile('word/document.xml');
 
     if (documentFile == null) {
@@ -109,9 +113,7 @@ class MaterialProcessingService {
 
     final buffer = StringBuffer();
 
-    final textNodes = document.findAllElements('w:t');
-
-    for (final node in textNodes) {
+    for (final node in document.findAllElements('w:t')) {
       buffer.write(node.innerText);
       buffer.write(' ');
     }

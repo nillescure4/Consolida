@@ -64,37 +64,73 @@ class _HomePageState extends State<HomePage> {
         );
   }
 
-  Future<List<_HomeSession>> _loadSessions(List<Subject> subjects) async {
+  Future<_HomeData> _loadHomeData(List<Subject> subjects) async {
     final sessions = <_HomeSession>[];
+    final subjectStates = <String, _SubjectHomeState>{};
 
     for (final subject in subjects) {
-      final snapshot = await _subjectsCollection
+      final materialSnapshot = await _subjectsCollection
+          .doc(subject.id)
+          .collection('processedMaterials')
+          .limit(1)
+          .get();
+
+      final goalsSnapshot =
+          await _subjectsCollection.doc(subject.id).collection('goals').get();
+
+      final sessionsSnapshot = await _subjectsCollection
           .doc(subject.id)
           .collection('practiceSessions')
           .where('status', isEqualTo: 'pending')
           .get();
 
-      for (final doc in snapshot.docs) {
+      final pendingSessions = <_HomeSession>[];
+
+      for (final doc in sessionsSnapshot.docs) {
         final data = doc.data();
         final scheduledDateRaw = data['scheduledDate'];
 
         if (scheduledDateRaw is! Timestamp) continue;
 
-        sessions.add(
-          _HomeSession(
-            subjectName: subject.name,
-            goalTitle: data['goalTitle'] ?? 'Objectiu',
-            scheduledDate: scheduledDateRaw.toDate(),
-            durationMinutes:
-                data['durationMinutes'] is int ? data['durationMinutes'] as int : 30,
-          ),
+        final session = _HomeSession(
+          subjectName: subject.name,
+          goalTitle: data['goalTitle'] ?? 'Objectiu',
+          scheduledDate: scheduledDateRaw.toDate(),
+          durationMinutes: data['durationMinutes'] is int
+              ? data['durationMinutes'] as int
+              : 30,
         );
+
+        sessions.add(session);
+        pendingSessions.add(session);
       }
+
+      final dueSessions = pendingSessions.where((session) {
+        return _isDue(session.scheduledDate);
+      }).toList();
+
+      String? warningMessage;
+
+      if (materialSnapshot.docs.isEmpty) {
+        warningMessage = 'Falta importar material';
+      } else if (goalsSnapshot.docs.isEmpty) {
+        warningMessage = 'Falta crear un objectiu';
+      } else if (dueSessions.isNotEmpty) {
+        warningMessage =
+            'Tens ${dueSessions.length} pràctica${dueSessions.length == 1 ? '' : 's'} pendent${dueSessions.length == 1 ? '' : 's'}';
+      }
+
+      subjectStates[subject.id] = _SubjectHomeState(
+        warningMessage: warningMessage,
+      );
     }
 
     sessions.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
 
-    return sessions;
+    return _HomeData(
+      sessions: sessions,
+      subjectStates: subjectStates,
+    );
   }
 
   Future<void> _signOut() async {
@@ -287,7 +323,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSubjectsSection(List<Subject> subjects) {
+  Widget _buildSubjectsSection({
+    required List<Subject> subjects,
+    required Map<String, _SubjectHomeState> subjectStates,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -300,19 +339,45 @@ class _HomePageState extends State<HomePage> {
           const Card(
             child: Padding(
               padding: EdgeInsets.all(18),
-              child: Text(
-                'Encara no has creat cap assignatura.',
-              ),
+              child: Text('Encara no has creat cap assignatura.'),
             ),
           ),
         ...subjects.map(
-          (subject) => Card(
-            child: ListTile(
-              title: Text(subject.name),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _openSubject(subject),
-            ),
-          ),
+          (subject) {
+            final warning = subjectStates[subject.id]?.warningMessage;
+
+            return Card(
+              child: ListTile(
+                title: Text(subject.name),
+                subtitle: warning == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.warning_amber_rounded,
+                              size: 16,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                warning,
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _openSubject(subject),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -392,11 +457,15 @@ class _HomePageState extends State<HomePage> {
             builder: (context, subjectsSnapshot) {
               final subjects = subjectsSnapshot.data ?? [];
 
-              return FutureBuilder<List<_HomeSession>>(
+              return FutureBuilder<_HomeData>(
                 key: ValueKey(_refreshCounter),
-                future: _loadSessions(subjects),
-                builder: (context, sessionsSnapshot) {
-                  final sessions = sessionsSnapshot.data ?? [];
+                future: _loadHomeData(subjects),
+                builder: (context, homeSnapshot) {
+                  final homeData = homeSnapshot.data ??
+                      const _HomeData(
+                        sessions: [],
+                        subjectStates: {},
+                      );
 
                   return RefreshIndicator(
                     onRefresh: _manualRefresh,
@@ -412,11 +481,14 @@ class _HomePageState extends State<HomePage> {
                           'Continua consolidant el teu aprenentatge.',
                         ),
                         const SizedBox(height: 18),
-                        _buildPendingSessionsCard(sessions),
+                        _buildPendingSessionsCard(homeData.sessions),
                         const SizedBox(height: 18),
-                        _buildSubjectsSection(subjects),
+                        _buildSubjectsSection(
+                          subjects: subjects,
+                          subjectStates: homeData.subjectStates,
+                        ),
                         const SizedBox(height: 18),
-                        _buildUpcomingSessionsCard(sessions),
+                        _buildUpcomingSessionsCard(homeData.sessions),
                         const SizedBox(height: 80),
                       ],
                     ),
@@ -429,6 +501,24 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+class _HomeData {
+  final List<_HomeSession> sessions;
+  final Map<String, _SubjectHomeState> subjectStates;
+
+  const _HomeData({
+    required this.sessions,
+    required this.subjectStates,
+  });
+}
+
+class _SubjectHomeState {
+  final String? warningMessage;
+
+  const _SubjectHomeState({
+    required this.warningMessage,
+  });
 }
 
 class _HomeSession {

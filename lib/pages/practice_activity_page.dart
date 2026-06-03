@@ -22,6 +22,7 @@ class PracticeActivityPage extends StatefulWidget {
   final ValueNotifier<bool> completionDialogShownNotifier;
   final Future<void> Function(int remainingSeconds) onTick;
   final Future<void> Function() onTimeFinished;
+  final Future<bool> Function() hasMoreDueSessions;
 
   const PracticeActivityPage({
     super.key,
@@ -35,6 +36,7 @@ class PracticeActivityPage extends StatefulWidget {
     required this.completionDialogShownNotifier,
     required this.onTick,
     required this.onTimeFinished,
+    required this.hasMoreDueSessions,
   });
 
   @override
@@ -152,45 +154,63 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
     _timeFinishedHandled = true;
 
     if (widget.sessionId.isEmpty) return;
-    if (widget.completionDialogShownNotifier.value) return;
 
     widget.completionDialogShownNotifier.value = true;
 
-    await widget.onTimeFinished();
+    bool hasMoreDueSessions = false;
+
+    try {
+      hasMoreDueSessions = await widget.hasMoreDueSessions();
+    } catch (_) {
+      hasMoreDueSessions = false;
+    }
 
     if (!mounted) return;
 
     final continuePracticing = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Pràctica completada'),
-          content: const Text(
-            'Felicitats! Has completat aquesta sessió. Si tens més sessions pendents, en tornar a la pantalla de pràctica es carregarà la següent.',
+          content: Text(
+            hasMoreDueSessions
+                ? 'Felicitats! Has completat aquesta sessió. Tens més sessions pendents acumulades, així que pots passar directament a la següent.'
+                : 'Felicitats! Has completat aquesta sessió. No tens més sessions pendents acumulades, però pots seguir practicant lliurement.',
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context, false);
+                Navigator.of(dialogContext).pop(false);
               },
               child: const Text('Parar per avui'),
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(context, true);
+                Navigator.of(dialogContext).pop(true);
               },
-              child: const Text('Següent sessió'),
+              child: Text(
+                hasMoreDueSessions ? 'Següent sessió' : 'Seguir practicant',
+              ),
             ),
           ],
         );
       },
     );
 
+    await widget.onTimeFinished();
+
     if (!mounted) return;
 
-    Navigator.pop(context, continuePracticing == true);
+    Navigator.of(context).pop(
+    PracticeCompletionResult(
+      continuePracticing: continuePracticing == true,
+      hasMoreDueSessions: hasMoreDueSessions,
+    ),
+  );
   }
+
+
 
   Future<void> _registerAttempt(bool isCorrect) async {
     await _statsService.registerAttempt(
@@ -963,4 +983,14 @@ class _FlashcardFace extends StatelessWidget {
       ),
     );
   }
+}
+
+class PracticeCompletionResult {
+  final bool continuePracticing;
+  final bool hasMoreDueSessions;
+
+  const PracticeCompletionResult({
+    required this.continuePracticing,
+    required this.hasMoreDueSessions,
+  });
 }

@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/ai_generated_activity.dart';
@@ -13,7 +15,8 @@ import '../services/material_processing_service.dart';
 import '../services/objective_service.dart';
 import '../services/practice_error_service.dart';
 import '../widgets/app_scaffold.dart';
-import 'practice_activity_page.dart';
+import '../pages/practice_activity_page.dart';
+import '../pages/visualize_page.dart';
 
 class PracticePage extends StatefulWidget {
   final Subject subject;
@@ -35,6 +38,9 @@ class _PracticePageState extends State<PracticePage> {
   final GeminiService _geminiService = GeminiService();
   final AiActivityService _aiActivityService = AiActivityService();
 
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   bool _isGenerating = false;
 
   ValueNotifier<int>? _remainingSecondsNotifier;
@@ -46,6 +52,57 @@ class _PracticePageState extends State<PracticePage> {
     _remainingSecondsNotifier?.dispose();
     _completionDialogShownNotifier?.dispose();
     super.dispose();
+  }
+
+  String get _userId {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw Exception('No hi ha usuari autenticat.');
+    }
+    return user.uid;
+  }
+
+  CollectionReference<Map<String, dynamic>> get _practiceSessionsCollection {
+    return _firestore
+        .collection('users')
+        .doc(_userId)
+        .collection('subjects')
+        .doc(widget.subject.id)
+        .collection('practiceSessions');
+  }
+
+  Future<bool> _hasMoreDueSessionsAfterCurrent() async {
+    final activeSessionId = _activeSessionId;
+
+    final now = DateTime.now();
+    final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    final snapshot = await _practiceSessionsCollection
+        .where('status', isEqualTo: 'pending')
+        .get();
+
+    for (final doc in snapshot.docs) {
+      if (doc.id == activeSessionId) continue;
+
+      final data = doc.data();
+      final scheduledDateRaw = data['scheduledDate'];
+
+      DateTime? scheduledDate;
+
+      if (scheduledDateRaw is Timestamp) {
+        scheduledDate = scheduledDateRaw.toDate();
+      } else if (scheduledDateRaw is DateTime) {
+        scheduledDate = scheduledDateRaw;
+      }
+
+      if (scheduledDate == null) continue;
+
+      if (!scheduledDate.isAfter(todayEnd)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   void _syncTimerWithFirestoreState(PracticeTimerState timerState) {
@@ -170,12 +227,13 @@ class _PracticePageState extends State<PracticePage> {
           duration: Duration(seconds: 5),
         ),
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error generant activitats: $error'),
+          content: Text('Hi ha hagut un error generant les activitats. Torna-ho a provar d’aquí uns minuts.'),
+          duration: Duration(seconds: 5),
         ),
       );
     } finally {
@@ -186,12 +244,27 @@ class _PracticePageState extends State<PracticePage> {
       }
     }
   }
+  void _showGeneratingMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'La generació d\'activitats pot tardar uns minuts. Si us plau, espera mentre Consolida prepara el contingut.',
+        ),
+        duration: Duration(seconds: 4),
+      ),
+    );
+  }
 
   Future<void> _openActivity({
     required PracticeActivityType type,
     required AiGeneratedActivity activity,
     required List<PracticeItem> errorItems,
   }) async {
+    if (_isGenerating) {
+      _showGeneratingMessage();
+      return;
+    }
+
     final remainingSecondsNotifier = _remainingSecondsNotifier;
     final completionDialogShownNotifier = _completionDialogShownNotifier;
 
@@ -276,7 +349,7 @@ class _PracticePageState extends State<PracticePage> {
         break;
     }
 
-    final goToNextSession = await Navigator.push<bool>(
+    final completionResult = await Navigator.push<PracticeCompletionResult>(
       context,
       MaterialPageRoute(
         builder: (_) => PracticeActivityPage(
@@ -290,16 +363,37 @@ class _PracticePageState extends State<PracticePage> {
           completionDialogShownNotifier: completionDialogShownNotifier,
           onTick: _persistRemainingSeconds,
           onTimeFinished: _markPracticeCompletedToday,
+          hasMoreDueSessions: _hasMoreDueSessionsAfterCurrent,
         ),
       ),
     );
 
     if (!mounted) return;
 
-    if (goToNextSession == true) {
-      _resetLocalTimer();
+    if (completionResult == null) return;
+
+    if (completionResult.continuePracticing) {
+      if (completionResult.hasMoreDueSessions) {
+        _resetLocalTimer();
+
+        await Future.delayed(const Duration(milliseconds: 400));
+
+        if (!mounted) return;
+
+        setState(() {});
+        return;
+      }
+
       setState(() {});
+      return;
     }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VisualizePage(subject: widget.subject),
+      ),
+    );
   }
 
   Future<void> _confirmRegenerate(
@@ -557,14 +651,39 @@ class _PracticePageState extends State<PracticePage> {
                                       : 'Regenerar activitats amb IA',
                                 ),
                               ),
+                              if (_isGenerating) ...[
+                                const SizedBox(height: 8),
+                                Card(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      children: [
+                                        const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            'La generació d\'activitats pot tardar uns minuts. Si us plau, espera mentre Consolida prepara el contingut.',
+                                            textAlign: TextAlign.left,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
                               const SizedBox(height: 24),
                               _ActivityCard(
                                 type: PracticeActivityType.summary,
                                 count: activity.documentSummaries.isNotEmpty
                                     ? activity.documentSummaries.length
                                     : (activity.summary.trim().isEmpty ? 0 : 1),
-                                enabled: activity.summary.trim().isNotEmpty ||
-                                    activity.documentSummaries.isNotEmpty,
+                                enabled: !_isGenerating && (activity.summary.trim().isNotEmpty ||
+                                    activity.documentSummaries.isNotEmpty),
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.summary,
                                   activity: activity,
@@ -574,7 +693,7 @@ class _PracticePageState extends State<PracticePage> {
                               _ActivityCard(
                                 type: PracticeActivityType.flashcards,
                                 count: activity.flashcards.length,
-                                enabled: activity.flashcards.isNotEmpty,
+                                enabled: !_isGenerating && activity.flashcards.isNotEmpty,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.flashcards,
                                   activity: activity,
@@ -584,7 +703,7 @@ class _PracticePageState extends State<PracticePage> {
                               _ActivityCard(
                                 type: PracticeActivityType.multipleChoice,
                                 count: multipleChoiceCount,
-                                enabled: multipleChoiceCount > 0,
+                                enabled: !_isGenerating && multipleChoiceCount > 0,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.multipleChoice,
                                   activity: activity,
@@ -594,7 +713,7 @@ class _PracticePageState extends State<PracticePage> {
                               _ActivityCard(
                                 type: PracticeActivityType.openQuestions,
                                 count: activity.openQuestions.length,
-                                enabled: activity.openQuestions.isNotEmpty,
+                                enabled: !_isGenerating && activity.openQuestions.isNotEmpty,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.openQuestions,
                                   activity: activity,
@@ -604,7 +723,7 @@ class _PracticePageState extends State<PracticePage> {
                               _ActivityCard(
                                 type: PracticeActivityType.exercises,
                                 count: activity.exercises.length,
-                                enabled: activity.exercises.isNotEmpty,
+                                enabled: !_isGenerating && activity.exercises.isNotEmpty,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.exercises,
                                   activity: activity,
@@ -614,7 +733,7 @@ class _PracticePageState extends State<PracticePage> {
                               _ActivityCard(
                                 type: PracticeActivityType.errorTest,
                                 count: errorItems.length,
-                                enabled: errorItems.isNotEmpty,
+                                enabled: !_isGenerating && errorItems.isNotEmpty,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.errorTest,
                                   activity: activity,
@@ -624,7 +743,7 @@ class _PracticePageState extends State<PracticePage> {
                               _ActivityCard(
                                 type: PracticeActivityType.timer,
                                 count: 1,
-                                enabled: true,
+                                enabled: !_isGenerating,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.timer,
                                   activity: activity,
@@ -677,9 +796,20 @@ class _NoGeneratedActivitiesView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Material processat disponible: $materialsCount fitxers.',
-              textAlign: TextAlign.center,
+            Column(
+              children: [
+                Text(
+                  'Material processat: $materialsCount fitxers',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'La generació d\'activitats pot tardar uns minuts. Si us plau, espera mentre Consolida prepara el contingut.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             ElevatedButton(
