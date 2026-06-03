@@ -667,7 +667,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
 
   Widget _buildRevealAnswerActivity() {
     final item = _currentItem;
-
+  
     if (item == null) {
       return const Center(
         child: Padding(
@@ -679,88 +679,92 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
         ),
       );
     }
-
+  
     if (_isFlashcardMode) {
       return _buildFlashcardActivity();
     }
-
+  
     final isExerciseMode = widget.type == PracticeActivityType.exercises ||
         item.type == PracticeActivityType.exercises;
-
+  
     final canAnswer = _showAnswer;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildTimer(),
-          const SizedBox(height: 16),
-          Text(
-            isExerciseMode
-                ? 'Exercici ${_currentIndex + 1}/${widget.items.length}'
-                : 'Pregunta ${_currentIndex + 1}/${widget.items.length}',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          _buildQuestionCard(item.question),
-          const SizedBox(height: 16),
-          if (_showAnswer)
-            _buildAnswerCard(
-              text: item.answer,
-              isExerciseMode: isExerciseMode,
-            ),
-          const Spacer(),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _showAnswer = !_showAnswer;
-              });
-            },
-            child: Text(
-              _showAnswer
-                  ? isExerciseMode
-                      ? 'Amagar solució'
-                      : 'Amagar resposta'
-                  : isExerciseMode
-                      ? 'Mostrar solució'
-                      : 'Mostrar resposta',
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (!canAnswer)
+  
+    return Scrollbar(
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildTimer(),
+            const SizedBox(height: 16),
             Text(
               isExerciseMode
-                  ? 'Mostra la solució per poder indicar si l’has resolt bé.'
-                  : 'Mostra la resposta per poder indicar si la sabies.',
+                  ? 'Exercici ${_currentIndex + 1}/${widget.items.length}'
+                  : 'Pregunta ${_currentIndex + 1}/${widget.items.length}',
               textAlign: TextAlign.center,
             ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed:
-                      canAnswer && !_savingError ? _markWrongAndNext : null,
-                  child: Text(
-                    isExerciseMode ? 'No ho he resolt bé' : 'No ho sabia',
+            const SizedBox(height: 16),
+            _buildQuestionCard(item.question),
+            const SizedBox(height: 16),
+            if (_showAnswer)
+              _buildAnswerCard(
+                text: item.answer,
+                isExerciseMode: isExerciseMode,
+              ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _showAnswer = !_showAnswer;
+                });
+              },
+              child: Text(
+                _showAnswer
+                    ? isExerciseMode
+                        ? 'Amagar solució'
+                        : 'Amagar resposta'
+                    : isExerciseMode
+                        ? 'Mostrar solució'
+                        : 'Mostrar resposta',
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (!canAnswer)
+              Text(
+                isExerciseMode
+                    ? 'Mostra la solució per poder indicar si l’has resolt bé.'
+                    : 'Mostra la resposta per poder indicar si la sabies.',
+                textAlign: TextAlign.center,
+              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed:
+                        canAnswer && !_savingError ? _markWrongAndNext : null,
+                    child: Text(
+                      isExerciseMode ? 'No ho he resolt bé' : 'No ho sabia',
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: canAnswer ? _markCorrectAndNext : null,
-                  child: Text(
-                    isExerciseMode ? 'Ho he resolt bé' : 'Ho sabia',
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: canAnswer ? _markCorrectAndNext : null,
+                    child: Text(
+                      isExerciseMode ? 'Ho he resolt bé' : 'Ho sabia',
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _buildNavigationButtons(),
-        ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildNavigationButtons(),
+          ],
+        ),
       ),
     );
   }
@@ -784,81 +788,79 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
     final answered = selectedOption != null;
     final correct = selectedOption == item.answer;
 
-    return Padding(
+    return ListView(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildTimer(),
-          const SizedBox(height: 16),
-          Text(
-            'Pregunta ${_currentIndex + 1}/${widget.items.length}',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          _buildQuestionCard(item.question),
-          const SizedBox(height: 16),
-          ...item.options.map(
-            (option) {
-              final isSelected = option == selectedOption;
-              final isCorrectOption = option == item.answer;
+      children: [
+        _buildTimer(),
+        const SizedBox(height: 16),
+        Text(
+          'Pregunta ${_currentIndex + 1}/${widget.items.length}',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        _buildQuestionCard(item.question),
+        const SizedBox(height: 16),
+        ...item.options.map(
+          (option) {
+            final isSelected = option == selectedOption;
+            final isCorrectOption = option == item.answer;
 
-              Color? buttonColor;
+            Color? buttonColor;
 
-              if (answered && isSelected && isCorrectOption) {
-                buttonColor = Colors.green.shade100;
-              } else if (answered && isSelected && !isCorrectOption) {
-                buttonColor = Colors.red.shade100;
-              } else if (answered && isCorrectOption) {
-                buttonColor = Colors.green.shade50;
-              }
+            if (answered && isSelected && isCorrectOption) {
+              buttonColor = Colors.green.shade100;
+            } else if (answered && isSelected && !isCorrectOption) {
+              buttonColor = Colors.red.shade100;
+            } else if (answered && isCorrectOption) {
+              buttonColor = Colors.green.shade50;
+            }
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: ElevatedButton(
-                  style: buttonColor == null
-                      ? null
-                      : ElevatedButton.styleFrom(
-                          backgroundColor: buttonColor,
-                          foregroundColor: Colors.black87,
-                        ),
-                  onPressed: answered
-                      ? null
-                      : () async {
-                          setState(() {
-                            _selectedOptionsByIndex[_currentIndex] = option;
-                          });
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ElevatedButton(
+                style: buttonColor == null
+                    ? null
+                    : ElevatedButton.styleFrom(
+                        backgroundColor: buttonColor,
+                        foregroundColor: Colors.black87,
+                      ),
+                onPressed: answered
+                    ? null
+                    : () async {
+                        setState(() {
+                          _selectedOptionsByIndex[_currentIndex] = option;
+                        });
 
-                          if (option != item.answer) {
-                            await _registerAttempt(false);
-                            await _saveCurrentAsError();
-                          } else {
-                            await _registerAttempt(true);
+                        if (option != item.answer) {
+                          await _registerAttempt(false);
+                          await _saveCurrentAsError();
+                        } else {
+                          await _registerAttempt(true);
 
-                            if (widget.type == PracticeActivityType.errorTest) {
-                              await _removeCurrentFromErrors();
-                            }
+                          if (widget.type == PracticeActivityType.errorTest) {
+                            await _removeCurrentFromErrors();
                           }
-                        },
-                  child: Text(option),
-                ),
-              );
-            },
-          ),
-          if (answered)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(
-                correct
-                    ? 'Correcte'
-                    : 'Incorrecte. Resposta correcta: ${item.answer}',
-                textAlign: TextAlign.center,
+                        }
+                      },
+                child: Text(option),
               ),
+            );
+          },
+        ),
+        if (answered)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text(
+              correct
+                  ? 'Correcte'
+                  : 'Incorrecte. Resposta correcta: ${item.answer}',
+              textAlign: TextAlign.center,
             ),
-          const Spacer(),
-          _buildNavigationButtons(),
-        ],
-      ),
+          ),
+        const SizedBox(height: 16),
+        _buildNavigationButtons(),
+        const SizedBox(height: 24),
+      ],
     );
   }
 
