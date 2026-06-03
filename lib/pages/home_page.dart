@@ -1,11 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/subject.dart';
 import '../services/auth_service.dart';
-import '../services/subject_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/app_scaffold.dart';
-import '../widgets/subject_card.dart';
 import 'subject_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -16,90 +16,101 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final AuthService _authService = AuthService();
-  final SubjectService _subjectService = SubjectService();
 
   final TextEditingController _subjectController = TextEditingController();
 
-  Future<void> createSubjectDialog() async {
-    _subjectController.clear();
+  int _refreshCounter = 0;
 
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Nova assignatura'),
-          content: TextField(
-            controller: _subjectController,
-            decoration: const InputDecoration(
-              labelText: 'Nom',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Cancel·lar'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final name = _subjectController.text.trim();
+  @override
+  void dispose() {
+    _subjectController.dispose();
+    super.dispose();
+  }
 
-                if (name.isEmpty) return;
+  String get _userId {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw Exception('No hi ha usuari autenticat.');
+    }
+    return user.uid;
+  }
 
-                await _subjectService.createSubject(name);
+  CollectionReference<Map<String, dynamic>> get _subjectsCollection {
+    return _firestore.collection('users').doc(_userId).collection('subjects');
+  }
 
-                if (!context.mounted) return;
+  void _refreshHome() {
+    if (!mounted) return;
 
-                Navigator.pop(context);
-              },
-              child: const Text('Crear'),
-            ),
-          ],
+    setState(() {
+      _refreshCounter++;
+    });
+  }
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> _userStream() {
+    return _firestore.collection('users').doc(_userId).snapshots();
+  }
+
+  Stream<List<Subject>> _subjectsStream() {
+    return _subjectsCollection
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map((doc) => Subject.fromFirestore(doc)).toList(),
         );
-      },
-    );
   }
 
-  void openSubject(Subject subject) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SubjectPage(subject: subject),
-      ),
-    );
+  Future<List<_HomeSession>> _loadSessions(List<Subject> subjects) async {
+    final sessions = <_HomeSession>[];
+
+    for (final subject in subjects) {
+      final snapshot = await _subjectsCollection
+          .doc(subject.id)
+          .collection('practiceSessions')
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final scheduledDateRaw = data['scheduledDate'];
+
+        if (scheduledDateRaw is! Timestamp) continue;
+
+        sessions.add(
+          _HomeSession(
+            subjectName: subject.name,
+            goalTitle: data['goalTitle'] ?? 'Objectiu',
+            scheduledDate: scheduledDateRaw.toDate(),
+            durationMinutes:
+                data['durationMinutes'] is int ? data['durationMinutes'] as int : 30,
+          ),
+        );
+      }
+    }
+
+    sessions.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
+
+    return sessions;
   }
 
-  Future<void> signOut() async {
-    final user = FirebaseAuth.instance.currentUser;
-
-    final displayName = user?.displayName?.trim();
-    final email = user?.email?.trim() ?? '';
-
-    final accountLabel = displayName != null && displayName.isNotEmpty
-        ? '$displayName ($email)'
-        : email;
-
+  Future<void> _signOut() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Confirmar tancament de sessió'),
-          content: Text(
-            'Vols tancar sessió amb el compte:\n\n$accountLabel?',
-          ),
+          title: const Text('Tancar sessió'),
+          content: const Text('Segur que vols tancar la sessió?'),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context, false);
-              },
+              onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel·lar'),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context, true);
-              },
+              onPressed: () => Navigator.pop(context, true),
               child: const Text('Tancar sessió'),
             ),
           ],
@@ -120,94 +131,316 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  @override
-  void dispose() {
-    _subjectController.dispose();
-    super.dispose();
+  Future<void> _addSubject() async {
+    _subjectController.clear();
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Nova assignatura'),
+          content: TextField(
+            controller: _subjectController,
+            decoration: const InputDecoration(
+              labelText: 'Nom de l’assignatura',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel·lar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context, _subjectController.text.trim());
+              },
+              child: const Text('Crear'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (name == null || name.isEmpty) return;
+
+    await _subjectsCollection.add({
+      'name': name,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    _refreshHome();
+  }
+
+  Future<void> _openSubject(Subject subject) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SubjectPage(subject: subject),
+      ),
+    );
+
+    _refreshHome();
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
+  bool _isDue(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final sessionDay = DateTime(date.year, date.month, date.day);
+
+    return sessionDay.isBefore(today) || sessionDay.isAtSameMomentAs(today);
+  }
+
+  String _getUserName(DocumentSnapshot<Map<String, dynamic>> snapshot) {
+    final data = snapshot.data();
+    final firebaseUser = _auth.currentUser;
+
+    final firestoreName = data?['name'];
+    final displayName = firebaseUser?.displayName;
+    final email = firebaseUser?.email;
+
+    if (firestoreName is String && firestoreName.trim().isNotEmpty) {
+      return firestoreName.trim();
+    }
+
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      return displayName.trim();
+    }
+
+    if (email != null && email.contains('@')) {
+      return email.split('@').first;
+    }
+
+    return 'usuari';
+  }
+
+  Widget _buildPendingSessionsCard(List<_HomeSession> sessions) {
+    final dueSessions = sessions.where((session) {
+      return _isDue(session.scheduledDate);
+    }).toList();
+
+    return Card(
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+          leading: Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.16),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(
+              Icons.notifications_active_outlined,
+              color: AppColors.primary,
+            ),
+          ),
+          title: const Text(
+            'Sessions pendents',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
+          ),
+          subtitle: Text(
+            dueSessions.isEmpty
+                ? 'No tens cap pràctica pendent avui.'
+                : 'Tens ${dueSessions.length} pràctica${dueSessions.length == 1 ? '' : 's'} pendent${dueSessions.length == 1 ? '' : 's'}.',
+          ),
+          children: [
+            if (dueSessions.isEmpty)
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Quan tinguis una sessió pendent, apareixerà aquí.'),
+              )
+            else
+              ...dueSessions.map(
+                (session) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.schedule,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${session.subjectName} · ${session.goalTitle}\n${_formatDate(session.scheduledDate)} · ${session.durationMinutes} min',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubjectsSection(List<Subject> subjects) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Assignatures',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 12),
+        if (subjects.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(18),
+              child: Text(
+                'Encara no has creat cap assignatura.',
+              ),
+            ),
+          ),
+        ...subjects.map(
+          (subject) => Card(
+            child: ListTile(
+              title: Text(subject.name),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _openSubject(subject),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUpcomingSessionsCard(List<_HomeSession> sessions) {
+    final upcoming = sessions.take(5).toList();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Properes sessions',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            if (upcoming.isEmpty)
+              const Text('No hi ha sessions programades.')
+            else
+              ...upcoming.map(
+                (session) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.schedule,
+                        size: 20,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '${session.subjectName} · ${session.goalTitle}\n${_formatDate(session.scheduledDate)} · ${session.durationMinutes} min',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _manualRefresh() async {
+    _refreshHome();
+    await Future.delayed(const Duration(milliseconds: 250));
   }
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Les meves assignatures',
+      title: '',
       automaticallyImplyLeading: false,
       actions: [
         IconButton(
-          onPressed: signOut,
+          onPressed: _signOut,
           icon: const Icon(Icons.logout),
         ),
       ],
       floatingActionButton: FloatingActionButton(
-        onPressed: createSubjectDialog,
+        onPressed: _addSubject,
         child: const Icon(Icons.add),
       ),
-      child: StreamBuilder<List<Subject>>(
-        stream: _subjectService.getSubjects(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
+      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: _userStream(),
+        builder: (context, userSnapshot) {
+          final userName =
+              userSnapshot.hasData ? _getUserName(userSnapshot.data!) : 'usuari';
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Text('Error: ${snapshot.error}'),
-            );
-          }
+          return StreamBuilder<List<Subject>>(
+            stream: _subjectsStream(),
+            builder: (context, subjectsSnapshot) {
+              final subjects = subjectsSnapshot.data ?? [];
 
-          final subjects = snapshot.data ?? [];
+              return FutureBuilder<List<_HomeSession>>(
+                key: ValueKey(_refreshCounter),
+                future: _loadSessions(subjects),
+                builder: (context, sessionsSnapshot) {
+                  final sessions = sessionsSnapshot.data ?? [];
 
-          if (subjects.isEmpty) {
-            return const Center(
-              child: Text('Encara no tens assignatures'),
-            );
-          }
-
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: ListView.builder(
-              itemCount: subjects.length,
-              itemBuilder: (context, index) {
-                final subject = subjects[index];
-
-                return StreamBuilder<bool>(
-                  stream: _subjectService.hasNoImportedFiles(subject.id),
-                  builder: (context, filesSnapshot) {
-                    final hasNoImportedFiles = filesSnapshot.data ?? false;
-
-                    return StreamBuilder<bool>(
-                      stream: _subjectService.hasNoObjectives(subject.id),
-                      builder: (context, objectivesSnapshot) {
-                        final hasNoObjectives =
-                            objectivesSnapshot.data ?? false;
-
-                        return StreamBuilder<bool>(
-                          stream: _subjectService.hasPendingPracticeToday(
-                            subject.id,
-                          ),
-                          builder: (context, practiceSnapshot) {
-                            final hasPendingPractice =
-                                practiceSnapshot.data ?? false;
-
-                            return SubjectCard(
-                              subject: subject,
-                              hasNoImportedFiles: hasNoImportedFiles,
-                              hasNoObjectives: hasNoObjectives,
-                              hasPendingPracticeToday: hasPendingPractice,
-                              onTap: () => openSubject(subject),
-                            );
-                          },
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
+                  return RefreshIndicator(
+                    onRefresh: _manualRefresh,
+                    child: ListView(
+                      padding: const EdgeInsets.all(20),
+                      children: [
+                        Text(
+                          'Hola, $userName',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Continua consolidant el teu aprenentatge.',
+                        ),
+                        const SizedBox(height: 18),
+                        _buildPendingSessionsCard(sessions),
+                        const SizedBox(height: 18),
+                        _buildSubjectsSection(subjects),
+                        const SizedBox(height: 18),
+                        _buildUpcomingSessionsCard(sessions),
+                        const SizedBox(height: 80),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
           );
         },
       ),
     );
   }
+}
+
+class _HomeSession {
+  final String subjectName;
+  final String goalTitle;
+  final DateTime scheduledDate;
+  final int durationMinutes;
+
+  const _HomeSession({
+    required this.subjectName,
+    required this.goalTitle,
+    required this.scheduledDate,
+    required this.durationMinutes,
+  });
 }

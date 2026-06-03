@@ -1,32 +1,48 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 class AppScaffold extends StatelessWidget {
   final String title;
   final Widget child;
-  final FloatingActionButton? floatingActionButton;
   final List<Widget>? actions;
+  final Widget? floatingActionButton;
   final bool automaticallyImplyLeading;
 
   const AppScaffold({
     super.key,
     required this.title,
     required this.child,
-    this.floatingActionButton,
     this.actions,
+    this.floatingActionButton,
     this.automaticallyImplyLeading = true,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(title),
-        centerTitle: true,
-        actions: actions,
+        toolbarHeight: 76,
         automaticallyImplyLeading: automaticallyImplyLeading,
+        titleSpacing: 8,
+        title: Text(
+          title,
+          maxLines: 2,
+          softWrap: true,
+          overflow: TextOverflow.visible,
+          style: Theme.of(context).appBarTheme.titleTextStyle,
+        ),
+        actions: actions,
       ),
-      body: SafeArea(child: child),
       floatingActionButton: floatingActionButton,
+      body: SafeArea(
+        child: Container(
+          width: double.infinity,
+          color: AppColors.background,
+          child: child,
+        ),
+      ),
     );
   }
 }

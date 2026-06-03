@@ -169,7 +169,9 @@ class _ObjectivesPageState extends State<ObjectivesPage> {
     final end = _dateOnly(targetDate);
     final totalDays = end.difference(start).inDays;
 
-    if (totalDays <= 0) return [start];
+    if (totalDays <= 0) {
+      return [start];
+    }
 
     final percentages = type == GoalType.shortTerm
         ? [0.05, 0.15, 0.35, 0.65, 1.0]
@@ -203,18 +205,36 @@ class _ObjectivesPageState extends State<ObjectivesPage> {
     required DateTime end,
     required int minutesPerSession,
   }) {
-    if (minutesPerSession >= 30 || baseDates.isEmpty) return baseDates;
+    final today = _dateOnly(DateTime.now());
+    final dates = <DateTime>[];
+
+    if (!_containsSameDay(dates, today)) {
+      dates.add(today);
+    }
+
+    if (minutesPerSession >= 30 || baseDates.isEmpty) {
+      for (final date in baseDates) {
+        if (!_containsSameDay(dates, date)) {
+          dates.add(date);
+        }
+      }
+
+      dates.sort((a, b) => a.compareTo(b));
+      return dates;
+    }
 
     final multiplier = (30 / minutesPerSession).ceil();
     final desiredCount = baseDates.length * multiplier;
     final totalDays = end.difference(start).inDays;
 
-    if (totalDays <= 0) return baseDates;
-
-    final dates = <DateTime>[];
+    if (totalDays <= 0) {
+      dates.sort((a, b) => a.compareTo(b));
+      return dates;
+    }
 
     for (int i = 1; i <= desiredCount; i++) {
       final ratio = i / desiredCount;
+
       final date = start.add(
         Duration(days: (totalDays * ratio).round()),
       );
@@ -226,6 +246,7 @@ class _ObjectivesPageState extends State<ObjectivesPage> {
       }
     }
 
+    dates.sort((a, b) => a.compareTo(b));
     return dates;
   }
 

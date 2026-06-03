@@ -108,7 +108,7 @@ class _ImportPageState extends State<ImportPage> {
         return AlertDialog(
           title: const Text('Esborrar fitxer'),
           content: Text(
-            'Segur que vols esborrar "${file.name}" del dispositiu?',
+            'Segur que vols eliminar "${file.name}" d’aquesta assignatura?',
           ),
           actions: [
             TextButton(
@@ -241,7 +241,7 @@ class _ImportPageState extends State<ImportPage> {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      'Prem el botó + per afegir apunts, PDFs o documents.',
+                      'Utilitza el botó d’importar per afegir un .txt, PDF o Word.',
                       textAlign: TextAlign.center,
                     ),
                   ],
