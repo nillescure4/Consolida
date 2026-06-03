@@ -46,15 +46,36 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
   final PracticeStatsService _statsService = PracticeStatsService();
 
   Timer? _timer;
+
   int _currentIndex = 0;
+
   bool _showAnswer = false;
-  String? _selectedOption;
   bool _savingError = false;
   bool _timeFinishedHandled = false;
+  bool _timerWarningShown = false;
+  bool _timerPaused = false;
+
+  final Map<int, String> _selectedOptionsByIndex = {};
+
 
   @override
   void initState() {
     super.initState();
+
+    if (widget.type == PracticeActivityType.timer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _showTimerWarningIfNeeded();
+
+        if (!mounted) return;
+
+        if (widget.sessionId.isNotEmpty &&
+            widget.remainingSecondsNotifier.value > 0) {
+          _startTimer();
+        }
+      });
+
+      return;
+    }
 
     if (widget.sessionId.isNotEmpty &&
         widget.remainingSecondsNotifier.value > 0) {
@@ -76,10 +97,38 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
         item.type == PracticeActivityType.flashcards;
   }
 
+  Future<void> _showTimerWarningIfNeeded() async {
+    if (_timerWarningShown || !mounted) return;
+
+    _timerWarningShown = true;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Temporitzador lliure'),
+          content: const Text(
+            'Aquesta modalitat només et dona temps per practicar. Has de triar tu què treballes i practicar pel teu compte.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Entès'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _startTimer() {
     _timer = Timer.periodic(
       const Duration(seconds: 1),
       (timer) async {
+        if (_timerPaused) return;
+
         if (widget.remainingSecondsNotifier.value <= 0) {
           timer.cancel();
           await _handleTimeFinished();
@@ -160,17 +209,26 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  void _goToIndex(int newIndex) {
+    if (newIndex < 0 || newIndex >= widget.items.length) return;
+
+    setState(() {
+      _currentIndex = newIndex;
+      _showAnswer = false;
+    });
+  }
+
   void _nextItem() {
     if (_currentIndex >= widget.items.length - 1) {
       Navigator.pop(context);
       return;
     }
 
-    setState(() {
-      _currentIndex++;
-      _showAnswer = false;
-      _selectedOption = null;
-    });
+    _goToIndex(_currentIndex + 1);
+  }
+
+  void _previousItem() {
+    _goToIndex(_currentIndex - 1);
   }
 
   Future<void> _saveCurrentAsError() async {
@@ -239,19 +297,133 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Text(
-              widget.sessionId.isEmpty
-                  ? 'Pràctica extra fora de sessió'
-                  : 'Temps restant: ${_formatTime(remainingSeconds)}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              children: [
+                Text(
+                  widget.sessionId.isEmpty
+                      ? 'Pràctica extra fora de sessió'
+                      : 'Temps restant: ${_formatTime(remainingSeconds)}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (widget.sessionId.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _timerPaused = !_timerPaused;
+                      });
+                    },
+                    icon: Icon(
+                      _timerPaused ? Icons.play_arrow : Icons.pause,
+                    ),
+                    label: Text(
+                      _timerPaused ? 'Reprendre temps' : 'Parar temps',
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildNavigationButtons() {
+    if (widget.items.length <= 1) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _currentIndex > 0 ? _previousItem : null,
+            icon: const Icon(Icons.chevron_left),
+            label: const Text('Anterior'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed:
+                _currentIndex < widget.items.length - 1 ? _nextItem : null,
+            icon: const Icon(Icons.chevron_right),
+            label: const Text('Següent'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuestionCard(String text) {
+    return Card(
+      color: Colors.grey.shade100,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.type == PracticeActivityType.exercises
+                  ? 'Enunciat'
+                  : 'Pregunta',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              text,
+              style: const TextStyle(
+                fontSize: 18,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnswerCard({
+    required String text,
+    required bool isExerciseMode,
+  }) {
+    return Card(
+      color: isExerciseMode ? Colors.blueGrey.shade50 : Colors.green.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isExerciseMode ? 'Solució' : 'Resposta',
+              style: TextStyle(
+                fontSize: 14,
+                color: isExerciseMode
+                    ? Colors.blueGrey.shade700
+                    : Colors.green.shade800,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              text,
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -269,6 +441,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
           const SizedBox(height: 8),
           Text(
             widget.summaryText!,
+            textAlign: TextAlign.justify,
             style: const TextStyle(
               fontSize: 16,
               height: 1.45,
@@ -299,6 +472,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
                   const SizedBox(height: 8),
                   Text(
                     documentSummary.summary,
+                    textAlign: TextAlign.justify,
                     style: const TextStyle(height: 1.45),
                   ),
                 ],
@@ -307,6 +481,48 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFreeTimerActivity() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  const Text(
+                    'Temporitzador',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Aquest mode no mostra preguntes. Utilitza el temps restant per practicar pel teu compte.',
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_timerPaused) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Temps aturat',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildTimer(),
+        ],
+      ),
     );
   }
 
@@ -325,6 +541,8 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
       );
     }
 
+    final canAnswer = _showAnswer;
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -338,7 +556,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Toca la targeta per girar-la. Arrossega a la dreta si la sabies o a l’esquerra si no la sabies.',
+            'Toca la targeta per girar-la. Després podràs indicar si la sabies o no.',
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -350,6 +568,8 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
                 });
               },
               onHorizontalDragEnd: (details) async {
+                if (!canAnswer) return;
+
                 final velocity = details.primaryVelocity ?? 0;
 
                 if (velocity > 250) {
@@ -359,42 +579,53 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
                 }
               },
               child: Center(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 350),
-                  transitionBuilder: (child, animation) {
-                    final rotate = Tween<double>(
-                      begin: math.pi,
-                      end: 0,
-                    ).animate(animation);
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 340,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    transitionBuilder: (child, animation) {
+                      final rotate = Tween<double>(
+                        begin: math.pi,
+                        end: 0,
+                      ).animate(animation);
 
-                    return AnimatedBuilder(
-                      animation: rotate,
-                      child: child,
-                      builder: (context, child) {
-                        return Transform(
-                          transform: Matrix4.rotationY(rotate.value),
-                          alignment: Alignment.center,
-                          child: child,
-                        );
-                      },
-                    );
-                  },
-                  child: _FlashcardFace(
-                    key: ValueKey(_showAnswer),
-                    text: _showAnswer ? item.answer : item.question,
-                    label: _showAnswer ? 'Resposta' : 'Pregunta',
-                    isAnswer: _showAnswer,
+                      return AnimatedBuilder(
+                        animation: rotate,
+                        child: child,
+                        builder: (context, child) {
+                          return Transform(
+                            transform: Matrix4.rotationY(rotate.value),
+                            alignment: Alignment.center,
+                            child: child,
+                          );
+                        },
+                      );
+                    },
+                    child: _FlashcardFace(
+                      key: ValueKey(_showAnswer),
+                      text: _showAnswer ? item.answer : item.question,
+                      label: _showAnswer ? 'Resposta' : 'Pregunta',
+                      isAnswer: _showAnswer,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          if (!canAnswer)
+            const Text(
+              'Gira la targeta per poder respondre.',
+              textAlign: TextAlign.center,
+            ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _savingError ? null : _markWrongAndNext,
+                  onPressed:
+                      canAnswer && !_savingError ? _markWrongAndNext : null,
                   icon: const Icon(Icons.close),
                   label: const Text('No ho sabia'),
                 ),
@@ -402,7 +633,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _markCorrectAndNext,
+                  onPressed: canAnswer ? _markCorrectAndNext : null,
                   icon: const Icon(Icons.check),
                   label: const Text('Ho sabia'),
                 ),
@@ -436,6 +667,8 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
     final isExerciseMode = widget.type == PracticeActivityType.exercises ||
         item.type == PracticeActivityType.exercises;
 
+    final canAnswer = _showAnswer;
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -450,43 +683,45 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                item.question,
-                style: const TextStyle(fontSize: 18),
-              ),
-            ),
-          ),
+          _buildQuestionCard(item.question),
           const SizedBox(height: 16),
           if (_showAnswer)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  item.answer,
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
+            _buildAnswerCard(
+              text: item.answer,
+              isExerciseMode: isExerciseMode,
             ),
           const Spacer(),
           ElevatedButton(
             onPressed: () {
               setState(() {
-                _showAnswer = true;
+                _showAnswer = !_showAnswer;
               });
             },
             child: Text(
-              isExerciseMode ? 'Mostrar solució' : 'Mostrar resposta',
+              _showAnswer
+                  ? isExerciseMode
+                      ? 'Amagar solució'
+                      : 'Amagar resposta'
+                  : isExerciseMode
+                      ? 'Mostrar solució'
+                      : 'Mostrar resposta',
             ),
           ),
+          const SizedBox(height: 8),
+          if (!canAnswer)
+            Text(
+              isExerciseMode
+                  ? 'Mostra la solució per poder indicar si l’has resolt bé.'
+                  : 'Mostra la resposta per poder indicar si la sabies.',
+              textAlign: TextAlign.center,
+            ),
           const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: _savingError ? null : _markWrongAndNext,
+                  onPressed:
+                      canAnswer && !_savingError ? _markWrongAndNext : null,
                   child: Text(
                     isExerciseMode ? 'No ho he resolt bé' : 'No ho sabia',
                   ),
@@ -495,7 +730,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _markCorrectAndNext,
+                  onPressed: canAnswer ? _markCorrectAndNext : null,
                   child: Text(
                     isExerciseMode ? 'Ho he resolt bé' : 'Ho sabia',
                   ),
@@ -503,6 +738,8 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          _buildNavigationButtons(),
         ],
       ),
     );
@@ -523,8 +760,9 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
       );
     }
 
-    final answered = _selectedOption != null;
-    final correct = _selectedOption == item.answer;
+    final selectedOption = _selectedOptionsByIndex[_currentIndex];
+    final answered = selectedOption != null;
+    final correct = selectedOption == item.answer;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -538,26 +776,37 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                item.question,
-                style: const TextStyle(fontSize: 18),
-              ),
-            ),
-          ),
+          _buildQuestionCard(item.question),
           const SizedBox(height: 16),
           ...item.options.map(
             (option) {
+              final isSelected = option == selectedOption;
+              final isCorrectOption = option == item.answer;
+
+              Color? buttonColor;
+
+              if (answered && isSelected && isCorrectOption) {
+                buttonColor = Colors.green.shade100;
+              } else if (answered && isSelected && !isCorrectOption) {
+                buttonColor = Colors.red.shade100;
+              } else if (answered && isCorrectOption) {
+                buttonColor = Colors.green.shade50;
+              }
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: ElevatedButton(
+                  style: buttonColor == null
+                      ? null
+                      : ElevatedButton.styleFrom(
+                          backgroundColor: buttonColor,
+                          foregroundColor: Colors.black87,
+                        ),
                   onPressed: answered
                       ? null
                       : () async {
                           setState(() {
-                            _selectedOption = option;
+                            _selectedOptionsByIndex[_currentIndex] = option;
                           });
 
                           if (option != item.answer) {
@@ -587,10 +836,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
               ),
             ),
           const Spacer(),
-          ElevatedButton(
-            onPressed: answered ? _nextItem : null,
-            child: const Text('Següent'),
-          ),
+          _buildNavigationButtons(),
         ],
       ),
     );
@@ -640,6 +886,9 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
       case PracticeActivityType.exercises:
         child = _buildRevealAnswerActivity();
         break;
+      case PracticeActivityType.timer:
+        child = _buildFreeTimerActivity();
+        break;
     }
 
     return AppScaffold(
@@ -664,10 +913,8 @@ class _FlashcardFace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(
-        minHeight: 300,
-        maxWidth: 520,
-      ),
+      width: double.infinity,
+      height: 340,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: isAnswer ? Colors.grey.shade800 : Colors.white,
@@ -696,14 +943,20 @@ class _FlashcardFace extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 22,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-              color: isAnswer ? Colors.white : Colors.grey.shade900,
+          Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                child: Text(
+                  text,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                    color: isAnswer ? Colors.white : Colors.grey.shade900,
+                  ),
+                ),
+              ),
             ),
           ),
         ],

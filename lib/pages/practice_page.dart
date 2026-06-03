@@ -270,6 +270,10 @@ class _PracticePageState extends State<PracticePage> {
       case PracticeActivityType.errorTest:
         items = errorItems;
         break;
+
+      case PracticeActivityType.timer:
+        items = [];
+        break;
     }
 
     final goToNextSession = await Navigator.push<bool>(
@@ -617,6 +621,16 @@ class _PracticePageState extends State<PracticePage> {
                                   errorItems: errorItems,
                                 ),
                               ),
+                              _ActivityCard(
+                                type: PracticeActivityType.timer,
+                                count: 1,
+                                enabled: true,
+                                onTap: () => _openActivity(
+                                  type: PracticeActivityType.timer,
+                                  activity: activity,
+                                  errorItems: errorItems,
+                                ),
+                              ),
                             ],
                           );
                         },
@@ -703,15 +717,17 @@ class _ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final subtitle = type == PracticeActivityType.timer
+        ? type.description
+        : enabled
+            ? '${type.description}\nDisponibles: $count'
+            : '${type.description}\nNo disponible encara.';
+
     return Card(
       child: ListTile(
         enabled: enabled,
         title: Text(type.title),
-        subtitle: Text(
-          enabled
-              ? '${type.description}\nDisponibles: $count'
-              : '${type.description}\nNo disponible encara.',
-        ),
+        subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
         onTap: enabled ? onTap : null,
       ),
