@@ -9,6 +9,7 @@ import '../models/subject.dart';
 import '../services/objective_service.dart';
 import '../services/practice_stats_service.dart';
 import '../widgets/app_scaffold.dart';
+import '../theme/app_theme.dart';
 
 class VisualizePage extends StatelessWidget {
   final Subject subject;
@@ -24,7 +25,7 @@ class VisualizePage extends StatelessWidget {
     final statsService = PracticeStatsService();
 
     return AppScaffold(
-      title: 'Progrés - ${subject.name}',
+      title: 'Veure progrés - ${subject.name}',
       child: StreamBuilder<List<StudyGoal>>(
         stream: objectiveService.getGoals(subject.id),
         builder: (context, goalsSnapshot) {
@@ -164,8 +165,9 @@ class _ProgressStats {
                 .first
                 .scheduledDate);
 
-    final chartEndDate =
-        targetDates.isNotEmpty ? targetDates.first : chartStartDate.add(const Duration(days: 365));
+    final chartEndDate = targetDates.isNotEmpty
+        ? targetDates.first
+        : chartStartDate.add(const Duration(days: 365));
 
     final daysUntilTarget =
         targetDates.isEmpty ? -1 : max(0, targetDates.first.difference(now).inDays);
@@ -189,8 +191,9 @@ class _ProgressStats {
 
     final totalErrors = attempts.where((attempt) => !attempt.isCorrect).length;
 
-    final lastSessionErrorRate =
-        lastSessionAttempts.isEmpty ? 0.0 : lastSessionErrors / lastSessionAttempts.length;
+    final lastSessionErrorRate = lastSessionAttempts.isEmpty
+        ? 0.0
+        : lastSessionErrors / lastSessionAttempts.length;
 
     final totalErrorRate = attempts.isEmpty ? 0.0 : totalErrors / attempts.length;
 
@@ -289,7 +292,9 @@ class _MetricGrid extends StatelessWidget {
         ),
         _MetricCard(
           title: 'Dies fins data límit',
-          value: stats.daysUntilTarget < 0 ? 'Sense límit' : stats.daysUntilTarget.toString(),
+          value: stats.daysUntilTarget < 0
+              ? 'Sense límit'
+              : stats.daysUntilTarget.toString(),
         ),
         _MetricCard(
           title: 'Progrés total',
@@ -442,7 +447,8 @@ class _ForgettingCurveCard extends StatelessWidget {
                 Padding(
                   padding: EdgeInsets.only(bottom: 12),
                   child: Text(
-                    'La corba de l’oblit és una corba teòrica que mostra com el coneixement disminueix amb el temps si no es repassa. En aquesta visualització, l’eix X és el temps: comença el dia de la primera pràctica o de creació de l’objectiu i acaba a la data límit. Si no hi ha data límit, acaba al cap d’un any. La corba teòrica no es força a arribar a 0% a la data límit: baixa segons el temps real transcorregut. Els punts representen el teu coneixement estimat a cada pràctica, calculat com 100% menys el percentatge d’error d’aquella sessió.',
+                    'La corba de l’oblit és una corba teòrica que mostra com el coneixement disminueix amb el temps si no es repassa (Ebbinghaus, 1885). En aquesta visualització, la línia negre és la corba de l’oblit i en taronja pots veure el teu nivell d’oblit. D’aquesta manera pots comparar com de consolidat tens el coneixement comparat amb si no haguessis fer servir Consolida. Els punts representen el teu coneixement estimat a cada pràctica.',
+                    textAlign: TextAlign.justify,
                   ),
                 ),
               ],
@@ -525,6 +531,7 @@ class _LegendPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
+      ..color = line ? Colors.black : AppColors.primary
       ..strokeWidth = line ? 3 : 0
       ..style = line ? PaintingStyle.stroke : PaintingStyle.fill;
 
@@ -593,8 +600,8 @@ class _ForgettingCurvePainter extends CustomPainter {
         final logEnd = log(nextDays);
         final logNow = log(safeDays);
 
-        final ratio = ((logNow - logStart) / (logEnd - logStart))
-            .clamp(0.0, 1.0);
+        final ratio =
+            ((logNow - logStart) / (logEnd - logStart)).clamp(0.0, 1.0);
 
         return currentRetention +
             (nextRetention - currentRetention) * ratio;
@@ -614,22 +621,27 @@ class _ForgettingCurvePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final axisPaint = Paint()
+      ..color = Colors.black
       ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
 
     final gridPaint = Paint()
+      ..color = Colors.grey
       ..strokeWidth = 0.4
       ..style = PaintingStyle.stroke;
 
     final forgettingPaint = Paint()
+      ..color = Colors.black
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
 
     final pointPaint = Paint()
+      ..color = AppColors.primary
       ..style = PaintingStyle.fill;
 
     final pointLinePaint = Paint()
-      ..strokeWidth = 2
+      ..color = AppColors.primary
+      ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke;
 
     const left = 56.0;
@@ -753,16 +765,14 @@ class _ForgettingCurvePainter extends CustomPainter {
     final pointOffsets = <Offset>[];
 
     for (final point in validPoints) {
-      final daysFromStart =
-          point.date.difference(safeStart).inHours / 24.0;
+      final daysFromStart = point.date.difference(safeStart).inHours / 24.0;
 
       final xRatio = daysFromStart / totalDays;
 
       final x = left + (right - left) * xRatio.clamp(0.0, 1.0);
 
-      final y = bottom -
-          (bottom - top) *
-              point.knowledgePercentage.clamp(0.0, 1.0);
+      final y =
+          bottom - (bottom - top) * point.knowledgePercentage.clamp(0.0, 1.0);
 
       pointOffsets.add(Offset(x, y));
     }
@@ -783,8 +793,7 @@ class _ForgettingCurvePainter extends CustomPainter {
 
       canvas.drawCircle(offset, 5, pointPaint);
 
-      final label =
-          '${(validPoints[i].knowledgePercentage * 100).round()}%';
+      final label = '${(validPoints[i].knowledgePercentage * 100).round()}%';
 
       _drawText(
         canvas: canvas,
@@ -888,10 +897,25 @@ class _UpcomingSessionsCard extends StatelessWidget {
     required this.sessions,
   });
 
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final upcoming =
-        sessions.where((session) => session.status == 'pending').take(5).toList();
+    final upcoming = sessions.where((session) => session.status == 'pending').toList()
+      ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
+
+    final groupedByGoal = <String, List<PracticeSession>>{};
+
+    for (final session in upcoming) {
+      groupedByGoal.putIfAbsent(session.goalTitle, () => []);
+      groupedByGoal[session.goalTitle]!.add(session);
+    }
+
+    final hasMoreThanThree = groupedByGoal.values.any(
+      (goalSessions) => goalSessions.length > 3,
+    );
 
     return Card(
       child: Padding(
@@ -904,16 +928,71 @@ class _UpcomingSessionsCard extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
-            if (upcoming.isEmpty) const Text('No hi ha sessions pendents.'),
-            ...upcoming.map(
-              (session) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(session.goalTitle),
-                subtitle: Text(
-                  '${session.scheduledDate.day}/${session.scheduledDate.month}/${session.scheduledDate.year} · ${session.durationMinutes} min',
+            if (upcoming.isEmpty)
+              const Text('No hi ha sessions pendents.'),
+            ...groupedByGoal.entries.map(
+              (entry) {
+                final goalTitle = entry.key;
+                final goalSessions = entry.value;
+                final visibleSessions = goalSessions.take(3).toList();
+                final hiddenCount = goalSessions.length - visibleSessions.length;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        goalTitle,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      ...visibleSessions.map(
+                        (session) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.schedule,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${_formatDate(session.scheduledDate)} · ${session.durationMinutes} min',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (hiddenCount > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Hi ha $hiddenCount sessions més. Ves a Objectius per veure totes les sessions programades.',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            if (hasMoreThanThree) ...[
+              const SizedBox(height: 4),
+              const Text(
+                'Per consultar o modificar totes les sessions, ves a la funcionalitat d’Objectius.',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
