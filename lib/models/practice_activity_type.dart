@@ -20,7 +20,7 @@ extension PracticeActivityTypeExtension on PracticeActivityType {
       case PracticeActivityType.openQuestions:
         return 'Preguntes obertes';
       case PracticeActivityType.exercises:
-        return 'Exercicis';
+        return 'Exercicis importats';
       case PracticeActivityType.errorTest:
         return 'Test d’errors';
       case PracticeActivityType.timer:
@@ -39,7 +39,7 @@ extension PracticeActivityTypeExtension on PracticeActivityType {
       case PracticeActivityType.openQuestions:
         return 'Practica preguntes obertes i compara la resposta.';
       case PracticeActivityType.exercises:
-        return 'Resol exercicis detectats en els documents importats.';
+        return 'Resol els exercicis detectats en els documents importats.';
       case PracticeActivityType.errorTest:
         return 'Repeteix les preguntes que has fallat anteriorment.';
       case PracticeActivityType.timer:

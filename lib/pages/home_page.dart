@@ -6,7 +6,7 @@ import '../models/subject.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_scaffold.dart';
-import 'subject_page.dart';
+import '../pages/subject_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -130,6 +130,110 @@ class _HomePageState extends State<HomePage> {
     return _HomeData(
       sessions: sessions,
       subjectStates: subjectStates,
+    );
+  }
+
+  Future<void> _showUserGuide() async {
+
+    Widget section(String title, List<String> paragraphs) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (int i = 0; i < paragraphs.length; i++) ...[
+                    Text(
+                      paragraphs[i],
+                      textAlign: TextAlign.justify,
+                      style: const TextStyle(
+                        height: 1.4,
+                      ),
+                    ),
+                    if (i < paragraphs.length - 1)
+                      const SizedBox(height: 8),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Guia d’ús'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                section(
+                  '1. Crea una assignatura',
+                  [
+                    'Comença creant una assignatura amb el botó +. Cada assignatura funciona com un espai independent amb els seus propis materials, objectius, pràctiques i progrés.',
+                  ],
+                ),
+                section(
+                  '2. Importa material',
+                  [
+                    'Dins de cada assignatura, ves a Importar i afegeix apunts, esquemes, resums o qualsevol material que vulguis consolidar. També és recomanable importar documents amb exercicis perquè després puguis practicar-los com a exercicis importats.',
+                  ],
+                ),
+                section(
+                  '3. Fixa objectius',
+                  [
+                    'Quan ja tinguis material importat, ves a Objectius. Allà pots definir si vols estudiar a curt termini, mitjà termini o llarg termini. Consolida generarà una proposta de sessions segons el temps disponible i la durada de pràctica que triïs.',
+                    'Abans de guardar l’objectiu, pots revisar les sessions planificades, modificar-ne les dates, afegir sessions o eliminar-ne, sempre respectant la data límit de l’objectiu.',
+                  ],
+                ),
+                section(
+                  '4. Practica',
+                  [
+                    'A Practicar trobaràs diferents modalitats: resums, targetes de memòria, preguntes tipus test, preguntes obertes, exercicis importats, test d’errors i temporitzador. Les sessions pendents consumeixen el temps planificat; si no tens cap sessió pendent, pots practicar igualment com a pràctica extra.',
+                    'Quan fallis preguntes, Consolida les guarda automàticament al Test d’errors perquè les puguis repetir més endavant. Quan les resolguis correctament, deixaran de quedar pendents.',
+                    'Si importes nou material o vols actualitzar les activitats, pots utilitzar l’opció Regenerar activitats amb IA. Aquesta acció substituirà les activitats actuals per unes de noves generades a partir dels documents importats.',
+                  ],
+                ),
+                section(
+                  '5. Consulta el progrés',
+                  [
+                    'A Veure progrés pots veure sessions completades, sessions pendents, percentatges d’error, rendiment per modalitat i una comparació amb la corba de l’oblit.',
+                  ],
+                ),
+                section(
+                  '6. Sessions pendents i properes sessions',
+                  [
+                    'A la pàgina principal pots veure si tens sessions pendents acumulades i les properes sessions programades. També veuràs avisos dins de cada assignatura si falta importar material, crear objectius o practicar.',
+                  ],
+                ),
+              ],
+
+
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Entès'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -330,10 +434,19 @@ class _HomePageState extends State<HomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+
         Text(
           'Assignatures',
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        if (subjects.isEmpty) ...[
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _showUserGuide,
+            icon: const Icon(Icons.help_outline),
+            label: const Text('Guia d’ús'),
+          ),
+        ],
         const SizedBox(height: 12),
         if (subjects.isEmpty)
           const Card(
@@ -437,6 +550,11 @@ class _HomePageState extends State<HomePage> {
       title: '',
       automaticallyImplyLeading: false,
       actions: [
+        TextButton.icon(
+          onPressed: _showUserGuide,
+          icon: const Icon(Icons.help_outline),
+          label: const Text('Guia d’ús'),
+        ),
         IconButton(
           onPressed: _signOut,
           icon: const Icon(Icons.logout),

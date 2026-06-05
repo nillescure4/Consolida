@@ -874,6 +874,25 @@ class _ActivityBreakdownCard extends StatelessWidget {
     required this.stats,
   });
 
+  String _activityTypeLabel(String type) {
+    switch (type) {
+      case 'flashcards':
+        return 'Targetes de memòria';
+      case 'multipleChoice':
+        return 'Preguntes tipus test';
+      case 'openQuestions':
+        return 'Preguntes obertes';
+      case 'exercises':
+        return 'Exercicis importats';
+      case 'summary':
+        return 'Resums';
+      case 'errorTest':
+        return 'Test d\'errors';
+      default:
+        return type;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final entries = stats.attemptsByActivity.entries.toList();
@@ -910,7 +929,9 @@ class _ActivityBreakdownCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${entry.key}: ${(errorRate * 100).round()}% error'),
+                    Text(
+                      '${_activityTypeLabel(entry.key)}: ${(errorRate * 100).round()}% error',
+                    ),
                     const SizedBox(height: 4),
                     LinearProgressIndicator(value: errorRate),
                   ],

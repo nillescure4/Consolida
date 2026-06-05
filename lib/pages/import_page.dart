@@ -209,53 +209,97 @@ class _ImportPageState extends State<ImportPage> {
               child: CircularProgressIndicator(),
             );
           }
-
+  
           if (snapshot.hasError) {
             return Center(
               child: Text('Error carregant fitxers: ${snapshot.error}'),
             );
           }
-
+  
           final files = snapshot.data ?? [];
-
-          if (files.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      color: Colors.orange,
-                      size: 48,
+  
+          final infoCard = Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Quin material pots importar?',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
                     ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Encara no has importat cap material.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Utilitza el botó d’importar per afegir un .txt, PDF o Word.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Et recomanem importar apunts, esquemes, resums o qualsevol material que vulguis consolidar.',
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Aquests documents no es faran servir per entrenar la IA ni amb finalitats comercials.',
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'També és recomanable importar documents amb exercicis perquè després puguis practicar-los dins l’aplicació.',
+                  ),
+                ],
               ),
+            ),
+          );
+  
+          if (files.isEmpty) {
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                infoCard,
+                const SizedBox(height: 24),
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.orange,
+                          size: 48,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Encara no has importat cap material.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Utilitza el botó d’importar per afegir un .txt, PDF o Word.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             );
           }
-
+  
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: files.length,
+            itemCount: files.length + 1,
             itemBuilder: (context, index) {
-              final file = files[index];
-
+              if (index == 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: infoCard,
+                );
+              }
+  
+              final file = files[index - 1];
+  
               return Card(
                 child: ListTile(
                   leading: Icon(

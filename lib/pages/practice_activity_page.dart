@@ -10,6 +10,7 @@ import '../models/subject.dart';
 import '../services/practice_error_service.dart';
 import '../services/practice_stats_service.dart';
 import '../widgets/app_scaffold.dart';
+import '../theme/app_theme.dart';
 
 class PracticeActivityPage extends StatefulWidget {
   final Subject subject;
@@ -382,7 +383,6 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
 
   Widget _buildQuestionCard(String text) {
     return Card(
-      color: Colors.grey.shade100,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -417,7 +417,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
     required bool isExerciseMode,
   }) {
     return Card(
-      color: isExerciseMode ? Colors.blueGrey.shade50 : Colors.green.shade50,
+      color: AppColors.surfaceLight,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -427,9 +427,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
               isExerciseMode ? 'Solució' : 'Resposta',
               style: TextStyle(
                 fontSize: 14,
-                color: isExerciseMode
-                    ? Colors.blueGrey.shade700
-                    : Colors.green.shade800,
+                color: AppColors.primaryDark,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -701,7 +699,7 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
             const SizedBox(height: 16),
             Text(
               isExerciseMode
-                  ? 'Exercici ${_currentIndex + 1}/${widget.items.length}'
+                  ? 'Exercicis importats ${_currentIndex + 1}/${widget.items.length}'
                   : 'Pregunta ${_currentIndex + 1}/${widget.items.length}',
               textAlign: TextAlign.center,
             ),
@@ -808,11 +806,13 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
             Color? buttonColor;
 
             if (answered && isSelected && isCorrectOption) {
-              buttonColor = Colors.green.shade100;
+              buttonColor = Colors.green.shade200;
             } else if (answered && isSelected && !isCorrectOption) {
-              buttonColor = Colors.red.shade100;
+              buttonColor = Colors.red.shade300;
             } else if (answered && isCorrectOption) {
-              buttonColor = Colors.green.shade50;
+              buttonColor = Colors.green.shade200;
+            } else if (answered) {
+              buttonColor = AppColors.primary.withOpacity(0.35);
             }
 
             return Padding(
@@ -822,26 +822,26 @@ class _PracticeActivityPageState extends State<PracticeActivityPage> {
                     ? null
                     : ElevatedButton.styleFrom(
                         backgroundColor: buttonColor,
-                        foregroundColor: Colors.black87,
+                        foregroundColor: answered ? Colors.black : null,
                       ),
-                onPressed: answered
-                    ? null
-                    : () async {
-                        setState(() {
-                          _selectedOptionsByIndex[_currentIndex] = option;
-                        });
+                onPressed: () async {
+                  if (answered) return;
 
-                        if (option != item.answer) {
-                          await _registerAttempt(false);
-                          await _saveCurrentAsError();
-                        } else {
-                          await _registerAttempt(true);
+                  setState(() {
+                    _selectedOptionsByIndex[_currentIndex] = option;
+                  });
 
-                          if (widget.type == PracticeActivityType.errorTest) {
-                            await _removeCurrentFromErrors();
-                          }
-                        }
-                      },
+                  if (option != item.answer) {
+                    await _registerAttempt(false);
+                    await _saveCurrentAsError();
+                  } else {
+                    await _registerAttempt(true);
+
+                    if (widget.type == PracticeActivityType.errorTest) {
+                      await _removeCurrentFromErrors();
+                    }
+                  }
+                },
                 child: Text(option),
               ),
             );

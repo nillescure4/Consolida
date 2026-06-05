@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/ai_generated_activity.dart';
 import '../models/practice_activity_type.dart';
@@ -17,6 +18,7 @@ import '../services/practice_error_service.dart';
 import '../widgets/app_scaffold.dart';
 import '../pages/practice_activity_page.dart';
 import '../pages/visualize_page.dart';
+import '../theme/app_theme.dart';
 
 class PracticePage extends StatefulWidget {
   final Subject subject;
@@ -396,6 +398,64 @@ class _PracticePageState extends State<PracticePage> {
     );
   }
 
+  Future<void> _confirmFirstGenerate(
+    List<ProcessedMaterial> materials,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Generar activitats amb IA'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Les activitats es generaran a partir dels documents importats.\n\n'
+                'Per fer-ho, aquests documents s’enviaran a Gemini perquè pugui crear el contingut d’estudi.\n\n'
+                'Consolida utilitza un entorn empresarial de Google/Gemini, de manera que aquests documents no s’utilitzen per entrenar ni millorar els models d’intel·ligència artificial.',
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () {
+                  launchUrl(
+                    Uri.parse(
+                      'https://docs.cloud.google.com/gemini/docs/discover/works',
+                    ),
+                    mode: LaunchMode.externalApplication,
+                  );
+                },
+                child: const Text(
+                  'Més informació sobre la privacitat de Google Cloud',
+                  style: TextStyle(
+                    color: Colors.blue,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text('Vols continuar?'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel·lar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Generar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    await _generateActivities(materials);
+  }
+
   Future<void> _confirmRegenerate(
     List<ProcessedMaterial> materials,
   ) async {
@@ -404,9 +464,38 @@ class _PracticePageState extends State<PracticePage> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Regenerar activitats'),
-          content: const Text(
-            'Això substituirà les activitats generades anteriorment. Vols continuar?',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Les activitats actuals s’eliminaran i es tornaran a generar a partir dels documents importats.\n\n'
+                'Per fer-ho, aquests documents s’enviaran a Gemini perquè pugui crear el contingut d’estudi.\n\n'
+                'Consolida utilitza un entorn empresarial de Google/Gemini, de manera que aquests documents no s’utilitzen per entrenar ni millorar els models d’intel·ligència artificial.',
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () {
+                  launchUrl(
+                    Uri.parse(
+                      'https://docs.cloud.google.com/gemini/docs/discover/works',
+                    ),
+                    mode: LaunchMode.externalApplication,
+                  );
+                },
+                child: const Text(
+                  'Més informació sobre la privacitat de Google Cloud',
+                  style: TextStyle(
+                    color: Colors.blue,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text('Vols continuar?'),
+            ],
           ),
+
           actions: [
             TextButton(
               onPressed: () {
@@ -599,8 +688,7 @@ class _PracticePageState extends State<PracticePage> {
                                 _NoGeneratedActivitiesView(
                                   materialsCount: materials.length,
                                   isGenerating: _isGenerating,
-                                  onGenerate: () =>
-                                      _generateActivities(materials),
+                                  onGenerate: () => _confirmFirstGenerate(materials),
                                 ),
                               ],
                             );
@@ -684,6 +772,7 @@ class _PracticePageState extends State<PracticePage> {
                                     : (activity.summary.trim().isEmpty ? 0 : 1),
                                 enabled: !_isGenerating && (activity.summary.trim().isNotEmpty ||
                                     activity.documentSummaries.isNotEmpty),
+                                isGenerating: _isGenerating,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.summary,
                                   activity: activity,
@@ -694,6 +783,7 @@ class _PracticePageState extends State<PracticePage> {
                                 type: PracticeActivityType.flashcards,
                                 count: activity.flashcards.length,
                                 enabled: !_isGenerating && activity.flashcards.isNotEmpty,
+                                isGenerating: _isGenerating,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.flashcards,
                                   activity: activity,
@@ -704,6 +794,7 @@ class _PracticePageState extends State<PracticePage> {
                                 type: PracticeActivityType.multipleChoice,
                                 count: multipleChoiceCount,
                                 enabled: !_isGenerating && multipleChoiceCount > 0,
+                                isGenerating: _isGenerating,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.multipleChoice,
                                   activity: activity,
@@ -714,6 +805,7 @@ class _PracticePageState extends State<PracticePage> {
                                 type: PracticeActivityType.openQuestions,
                                 count: activity.openQuestions.length,
                                 enabled: !_isGenerating && activity.openQuestions.isNotEmpty,
+                                isGenerating: _isGenerating,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.openQuestions,
                                   activity: activity,
@@ -724,6 +816,7 @@ class _PracticePageState extends State<PracticePage> {
                                 type: PracticeActivityType.exercises,
                                 count: activity.exercises.length,
                                 enabled: !_isGenerating && activity.exercises.isNotEmpty,
+                                isGenerating: _isGenerating,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.exercises,
                                   activity: activity,
@@ -734,6 +827,7 @@ class _PracticePageState extends State<PracticePage> {
                                 type: PracticeActivityType.errorTest,
                                 count: errorItems.length,
                                 enabled: !_isGenerating && errorItems.isNotEmpty,
+                                isGenerating: _isGenerating,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.errorTest,
                                   activity: activity,
@@ -744,6 +838,7 @@ class _PracticePageState extends State<PracticePage> {
                                 type: PracticeActivityType.timer,
                                 count: 1,
                                 enabled: !_isGenerating,
+                                isGenerating: _isGenerating,
                                 onTap: () => _openActivity(
                                   type: PracticeActivityType.timer,
                                   activity: activity,
@@ -837,29 +932,81 @@ class _ActivityCard extends StatelessWidget {
   final int count;
   final VoidCallback onTap;
   final bool enabled;
+  final bool isGenerating;
 
   const _ActivityCard({
     required this.type,
     required this.count,
     required this.onTap,
     this.enabled = true,
+    this.isGenerating = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final disabledMessage = isGenerating
+        ? 'Espera que es regenerin les activitats.'
+        : type == PracticeActivityType.errorTest
+            ? 'De moment no tens cap error.'
+            : type == PracticeActivityType.exercises
+                ? 'Per practicar exercicis, importa un document que contingui exercicis o problemes. Consolida no n’ha detectat cap en el material actual.'
+                : 'No disponible encara.';
+
     final subtitle = type == PracticeActivityType.timer
         ? type.description
         : enabled
             ? '${type.description}\nDisponibles: $count'
-            : '${type.description}\nNo disponible encara.';
+            : '${type.description}\n$disabledMessage';
+
+    final textColor =
+        enabled ? Theme.of(context).textTheme.bodyLarge?.color : Colors.grey;
 
     return Card(
       child: ListTile(
-        enabled: enabled,
-        title: Text(type.title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
+        enabled: true,
         onTap: enabled ? onTap : null,
+        title: Text(
+          type.title,
+          style: TextStyle(color: textColor),
+        ),
+        subtitle: enabled
+            ? Text(subtitle)
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    type.description,
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Icon(
+                          Icons.warning_amber_rounded,
+                          size: 15,
+                          color: Colors.orange,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          disabledMessage,
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+        trailing: Icon(
+          Icons.chevron_right,
+          color: enabled ? null : AppColors.primary,
+        ),
       ),
     );
   }
