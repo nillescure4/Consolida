@@ -547,7 +547,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: '',
+      title: 'Consolida',
       automaticallyImplyLeading: false,
       actions: [
         TextButton.icon(

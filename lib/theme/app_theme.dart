@@ -62,7 +62,7 @@ class AppTheme {
         centerTitle: false,
         titleTextStyle: TextStyle(
           color: AppColors.text,
-          fontSize: 22,
+          fontSize: 28,
           fontWeight: FontWeight.w800,
           fontFamily: 'Georgia',
         ),
