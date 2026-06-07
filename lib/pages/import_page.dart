@@ -237,11 +237,11 @@ class _ImportPageState extends State<ImportPage> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Aquests documents no es faran servir per entrenar la IA ni amb finalitats comercials.',
+                    'També és recomanable importar documents amb exercicis perquè després puguis practicar-los dins l’aplicació.',
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'També és recomanable importar documents amb exercicis perquè després puguis practicar-los dins l’aplicació.',
+                    'Aquests documents no es faran servir per entrenar la IA ni amb finalitats comercials.',
                   ),
                 ],
               ),
